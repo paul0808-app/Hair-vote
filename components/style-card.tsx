@@ -7,23 +7,24 @@ type Props = {
   style: Style;
   /** 選択順（1〜5）。未選択なら null */
   order: number | null;
-  onTap: (style: Style) => void;
+  /** 写真をタップしたとき。拡大モーダルを開く */
+  onOpen: (style: Style) => void;
   /** 最初に画面に見えている数枚だけ先に読み込む */
   eager: boolean;
 };
 
 type ImageState = "loading" | "loaded" | "error";
 
-export function StyleCard({ style, order, onTap, eager }: Props) {
+export function StyleCard({ style, order, onOpen, eager }: Props) {
   const [imageState, setImageState] = useState<ImageState>("loading");
   const selected = order !== null;
 
   return (
     <button
       type="button"
-      onClick={() => onTap(style)}
+      onClick={() => onOpen(style)}
       aria-pressed={selected}
-      aria-label={`${style.title}${selected ? `（${order}番目に選択中）` : ""}`}
+      aria-label={`${style.title} を大きく見る${selected ? `（${order}番目に選択中）` : ""}`}
       className={[
         "group relative block w-full aspect-square overflow-hidden rounded-xl bg-black/5",
         "transition-transform duration-100 active:scale-[0.97]",
