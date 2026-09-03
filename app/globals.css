@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  /* アプリ全体で使う色。ここを変えると全画面の色が一括で変わります */
+  --color-accent: #e11d48;
+  --color-accent-dark: #9f1239;
+  --color-ink: #1c1917;
+  --color-paper: #faf9f7;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  /* iOS Safari で長押ししたときのハイライトを消す */
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  /* 下部固定バーの高さぶんだけ余白を空け、最後の行が隠れないようにする */
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+/* 画像が読み込まれる前に出す、薄いグレーのプレースホルダー */
+.placeholder-shimmer {
+  background: linear-gradient(100deg, #ececec 30%, #f6f6f6 50%, #ececec 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.animate-toast-in {
+  animation: toast-in 0.18s ease-out;
+}
