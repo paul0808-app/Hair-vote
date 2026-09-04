@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useTransition } from "react";
+import { submitVote } from "@/app/actions";
 import { BottomBar } from "./bottom-bar";
 import { ConfirmDialog } from "./confirm-dialog";
 import { PhotoModal } from "./photo-modal";
@@ -10,9 +11,18 @@ import { Toast } from "./toast";
 import { useVoteSession } from "@/lib/use-vote-session";
 import type { Style } from "@/lib/types";
 
-export function VoteScreen({ styles }: { styles: Style[] }) {
-  const { ready, selectedIds, status, toggle, submit, reset } = useVoteSession();
+export function VoteScreen({
+  styles,
+  usingDummyData,
+}: {
+  styles: Style[];
+  usingDummyData: boolean;
+}) {
+  const { ready, sessionId, seat, salon, selectedIds, status, toggle, markSubmitted, reset } =
+    useVoteSession();
   const [toast, setToast] = useState<string | null>(null);
+  // 保存中かどうか。確定ボタンの二度押しを防ぐ
+  const [saving, startSaving] = useTransition();
   /** 拡大表示している写真の位置。null なら閉じている */
   const [modalIndex, setModalIndex] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -34,11 +44,19 @@ export function VoteScreen({ styles }: { styles: Style[] }) {
   const dismissToast = useCallback(() => setToast(null), []);
 
   const handleConfirm = useCallback(() => {
-    setConfirmOpen(false);
-    // フェーズ3では、ここで1回だけデータベースへまとめて保存する
-    submit();
-    window.scrollTo({ top: 0 });
-  }, [submit]);
+    if (!sessionId) return;
+    // ここが唯一のデータベース書き込み。お客様1人につき1回だけ実行される
+    startSaving(async () => {
+      const result = await submitVote({ sessionId, seat, salon, styleIds: selectedIds });
+      if (!result.ok) {
+        setToast(result.message);
+        return;
+      }
+      setConfirmOpen(false);
+      markSubmitted();
+      window.scrollTo({ top: 0 });
+    });
+  }, [sessionId, seat, salon, selectedIds, markSubmitted]);
 
   // 投票が確定していたら、完了画面に切り替える
   if (ready && status === "submitted") {
@@ -80,6 +98,8 @@ export function VoteScreen({ styles }: { styles: Style[] }) {
           style={{ paddingBottom: "calc(96px + env(safe-area-inset-bottom))" }}
         >
           全 {styles.length} スタイル
+          {/* データベースにつながっていないときだけ出る、スタッフ向けの目印 */}
+          {usingDummyData && <span className="ml-1 text-black/30">（仮データ）</span>}
         </p>
       </main>
 
@@ -102,6 +122,7 @@ export function VoteScreen({ styles }: { styles: Style[] }) {
       <ConfirmDialog
         open={confirmOpen}
         selected={selectedStyles}
+        saving={saving}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={handleConfirm}
       />

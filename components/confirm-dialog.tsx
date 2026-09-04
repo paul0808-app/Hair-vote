@@ -7,12 +7,14 @@ type Props = {
   open: boolean;
   /** 選んだ写真（選択順に並んでいる） */
   selected: Style[];
+  /** 保存中かどうか。ボタンの二度押しを防ぐ */
+  saving: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 };
 
 /** 「投票へ進む」を押したときに出る、最終確認のダイアログ */
-export function ConfirmDialog({ open, selected, onCancel, onConfirm }: Props) {
+export function ConfirmDialog({ open, selected, saving, onCancel, onConfirm }: Props) {
   if (!open) return null;
 
   const count = selected.length;
@@ -27,7 +29,7 @@ export function ConfirmDialog({ open, selected, onCancel, onConfirm }: Props) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-title"
-      onClick={onCancel}
+      onClick={saving ? undefined : onCancel}
     >
       <div
         className="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-7"
@@ -57,16 +59,18 @@ export function ConfirmDialog({ open, selected, onCancel, onConfirm }: Props) {
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-full bg-black/8 py-4 text-base font-bold text-black/70 active:scale-95 sm:text-lg"
+            disabled={saving}
+            className="flex-1 rounded-full bg-black/8 py-4 text-base font-bold text-black/70 active:scale-95 disabled:opacity-50 sm:text-lg"
           >
             もどる
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="flex-[1.4] rounded-full bg-accent py-4 text-base font-bold text-white shadow-sm active:scale-95 sm:text-lg"
+            disabled={saving}
+            className="flex-[1.4] rounded-full bg-accent py-4 text-base font-bold text-white shadow-sm active:scale-95 disabled:opacity-70 sm:text-lg"
           >
-            投票を確定する
+            {saving ? "送信中…" : "投票を確定する"}
           </button>
         </div>
       </div>

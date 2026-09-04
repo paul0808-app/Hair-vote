@@ -1,11 +1,14 @@
 import { VoteScreen } from "@/components/vote-screen";
-import { DUMMY_STYLES } from "@/lib/dummy-styles";
+import { getStyles } from "@/lib/styles";
 
-export default function Page() {
-  // フェーズ3で、この行を Supabase からの取得に差し替えます
-  const styles = DUMMY_STYLES.filter((s) => s.isActive).sort(
-    (a, b) => a.displayOrder - b.displayOrder,
-  );
+/**
+ * 投票画面は写真一覧を読み込むだけなので、5分間キャッシュして
+ * データベースへの負荷をかけないようにする（同時接続対策）。
+ */
+export const revalidate = 300;
 
-  return <VoteScreen styles={styles} />;
+export default async function Page() {
+  const { styles, usingDummyData } = await getStyles();
+
+  return <VoteScreen styles={styles} usingDummyData={usingDummyData} />;
 }

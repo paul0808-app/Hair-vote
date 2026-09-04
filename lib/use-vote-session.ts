@@ -14,6 +14,8 @@ type SessionState = {
   sessionId: string;
   /** 席番号（URLに ?seat=A1 と付いていれば入る） */
   seat: string | null;
+  /** 店舗（URLに ?salon=PAUL / ?salon=COCO と付いていれば入る） */
+  salon: string | null;
   /** 選んだ写真のID。並び順がそのまま選択順（1〜5番）になる */
   selectedIds: string[];
   status: BallotStatus;
@@ -21,14 +23,21 @@ type SessionState = {
   submittedAt: number | null;
 };
 
-function createSession(seat: string | null): SessionState {
+function createSession(seat: string | null, salon: string | null): SessionState {
   return {
     sessionId: crypto.randomUUID(),
     seat,
+    salon,
     selectedIds: [],
     status: "draft",
     submittedAt: null,
   };
+}
+
+/** URLの ?salon= は 'PAUL' か 'COCO' のときだけ受け付ける */
+function parseSalon(value: string | null): string | null {
+  const upper = value?.toUpperCase() ?? null;
+  return upper === "PAUL" || upper === "COCO" ? upper : null;
 }
 
 /** 保存されていた内容が壊れていないかを確かめる */
@@ -39,6 +48,7 @@ function parseSession(raw: string): SessionState | null {
     return {
       sessionId: v.sessionId,
       seat: typeof v.seat === "string" ? v.seat : null,
+      salon: typeof v.salon === "string" ? v.salon : null,
       selectedIds: Array.isArray(v.selectedIds)
         ? v.selectedIds.filter((x): x is string => typeof x === "string").slice(0, MAX_SELECTION)
         : [],
@@ -65,11 +75,15 @@ function isExpired(s: SessionState): boolean {
 export function useVoteSession() {
   const [session, setSession] = useState<SessionState | null>(null);
   const seatRef = useRef<string | null>(null);
+  const salonRef = useRef<string | null>(null);
 
-  // 最初の1回だけ：URLの席番号を読み、保存済みセッションを復元する
+  // 最初の1回だけ：URLの席番号・店舗を読み、保存済みセッションを復元する
   useEffect(() => {
-    const seat = new URLSearchParams(window.location.search).get("seat");
+    const params = new URLSearchParams(window.location.search);
+    const seat = params.get("seat");
+    const salon = parseSalon(params.get("salon"));
     seatRef.current = seat;
+    salonRef.current = salon;
 
     let restored: SessionState | null = null;
     try {
@@ -80,11 +94,15 @@ export function useVoteSession() {
     }
 
     if (!restored || isExpired(restored)) {
-      setSession(createSession(seat));
+      setSession(createSession(seat, salon));
       return;
     }
-    // URLの席番号のほうが新しければそちらを優先する
-    setSession(seat ? { ...restored, seat } : restored);
+    // URLの席番号・店舗が指定されていれば、そちらを優先する
+    setSession({
+      ...restored,
+      seat: seat ?? restored.seat,
+      salon: salon ?? restored.salon,
+    });
   }, []);
 
   // 状態が変わるたびにブラウザへ保存する（閉じても復元できるように）
@@ -102,7 +120,7 @@ export function useVoteSession() {
     if (session?.status !== "submitted" || session.submittedAt === null) return;
     const remaining = session.submittedAt + SESSION_EXPIRY_MS - Date.now();
     const timer = setTimeout(
-      () => setSession(createSession(seatRef.current)),
+      () => setSession(createSession(seatRef.current, salonRef.current)),
       Math.max(remaining, 0),
     );
     return () => clearTimeout(timer);
@@ -124,8 +142,8 @@ export function useVoteSession() {
     [session],
   );
 
-  /** 投票を確定する。フェーズ3でここからデータベースへの保存を行う */
-  const submit = useCallback(() => {
+  /** 投票を確定済みにする（データベースへの保存が成功したあとに呼ぶ） */
+  const markSubmitted = useCallback(() => {
     setSession((prev) =>
       prev && prev.status === "draft"
         ? { ...prev, status: "submitted", submittedAt: Date.now() }
@@ -135,17 +153,20 @@ export function useVoteSession() {
 
   /** 「次のお客様へ」。今のセッションを捨てて、新しい投票を最初から始める */
   const reset = useCallback(() => {
-    setSession(createSession(seatRef.current));
+    setSession(createSession(seatRef.current, salonRef.current));
   }, []);
 
   return {
     // localStorage はブラウザにしか無いので、読み込みが終わるまでは null
     session,
     ready: session !== null,
+    sessionId: session?.sessionId ?? null,
+    seat: session?.seat ?? null,
+    salon: session?.salon ?? null,
     selectedIds: session?.selectedIds ?? [],
     status: session?.status ?? "draft",
     toggle,
-    submit,
+    markSubmitted,
     reset,
   };
 }
