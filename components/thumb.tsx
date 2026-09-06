@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Style } from "@/lib/types";
+/** サムネイルの表示に必要な情報だけを受け取る */
+type ThumbSource = {
+  title: string;
+  imageUrl: string;
+  thumbUrl?: string | null;
+};
 
 /** これ以上待っても写真が来ないときは、スタイル名だけの表示に切り替える（ミリ秒） */
 const IMAGE_TIMEOUT_MS = 6000;
 
 /** 小さなサムネイル。写真が届かないときはスタイル名を表示する */
-export function Thumb({ style }: { style: Style }) {
+export function Thumb({ style }: { style: ThumbSource }) {
   const [state, setState] = useState<"loading" | "loaded" | "failed">("loading");
 
   useEffect(() => {

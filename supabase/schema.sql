@@ -139,3 +139,112 @@ exception
     return v_ballot_id;
 end;
 $$;
+
+-- =====================================================================
+-- ここから下は管理画面（フェーズ4）で使うものです。
+-- schema.sql をもう一度まるごと実行すれば、この部分も反映されます。
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 6. 写真の保存場所（Supabase Storage のバケット）
+--    public = true にして、投票画面から写真を表示できるようにする。
+--    アップロードはアプリのサーバー側（秘密キーを持つ側）からのみ行う。
+-- ---------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('style-photos', 'style-photos', true)
+on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------
+-- 7. ランキング集計
+--    カウンターを持たず、そのつど COUNT で数える（同時更新でズレないため）。
+--    p_from / p_to / p_salon が null のときは、その条件で絞り込まない。
+-- ---------------------------------------------------------------------
+create or replace function admin_ranking(
+  p_from  timestamptz,
+  p_to    timestamptz,
+  p_salon text
+) returns table (
+  style_id  uuid,
+  title     text,
+  stylist   text,
+  thumb_url text,
+  image_url text,
+  salon     text,
+  is_active boolean,
+  votes     bigint
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select s.id, s.title, s.stylist, s.thumb_url, s.image_url, s.salon, s.is_active,
+         count(b.id) as votes
+  from styles s
+  left join votes v on v.style_id = s.id
+  left join ballots b
+         on b.id = v.ballot_id
+        and b.status = 'submitted'
+        and (p_from  is null or b.submitted_at >= p_from)
+        and (p_to    is null or b.submitted_at <  p_to)
+        and (p_salon is null or b.salon = p_salon)
+  group by s.id
+  order by count(b.id) desc, s.display_order;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 8. サマリー（総投票数・総いいね数・平均選択枚数）
+--    総投票数 = 投票したお客様の人数
+-- ---------------------------------------------------------------------
+create or replace function admin_summary(
+  p_from  timestamptz,
+  p_to    timestamptz,
+  p_salon text
+) returns table (
+  total_ballots bigint,
+  total_votes   bigint,
+  avg_votes     numeric
+)
+language sql
+security definer
+set search_path = public
+as $$
+  with target as (
+    select id from ballots
+    where status = 'submitted'
+      and (p_from  is null or submitted_at >= p_from)
+      and (p_to    is null or submitted_at <  p_to)
+      and (p_salon is null or salon = p_salon)
+  ),
+  counted as (
+    select (select count(*) from target) as ballots,
+           (select count(*) from votes v where v.ballot_id in (select id from target)) as votes
+  )
+  select ballots,
+         votes,
+         case when ballots = 0 then 0 else round(votes::numeric / ballots, 2) end
+  from counted;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 9. 表示順の入れ替え（2件の display_order を交換する）
+--    1つの処理としてまとめて実行されるので、途中で崩れない。
+-- ---------------------------------------------------------------------
+create or replace function admin_swap_display_order(p_a uuid, p_b uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_a int;
+  v_b int;
+begin
+  select display_order into v_a from styles where id = p_a for update;
+  select display_order into v_b from styles where id = p_b for update;
+  if v_a is null or v_b is null then
+    raise exception 'style_not_found';
+  end if;
+  update styles set display_order = v_b where id = p_a;
+  update styles set display_order = v_a where id = p_b;
+end;
+$$;
