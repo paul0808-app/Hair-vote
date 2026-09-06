@@ -156,9 +156,6 @@ export function PhotoModal({ styles, index, order, onClose, onMove, onToggle }: 
       >
         <div className="mx-auto max-w-3xl">
           <h2 className="text-lg font-bold sm:text-2xl">{style.title}</h2>
-          {style.stylist && (
-            <p className="mt-0.5 text-sm text-white/70 sm:text-base">担当：{style.stylist}</p>
-          )}
           {style.caption && (
             <p className="mt-2 text-sm leading-relaxed text-white/85 sm:text-base">{style.caption}</p>
           )}

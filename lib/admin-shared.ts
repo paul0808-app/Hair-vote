@@ -3,6 +3,10 @@
  * データベースに触る処理は lib/admin.ts に分けてある。
  */
 
+import { SALON_CODES, SALON_LABELS, type SalonCode } from "./salons";
+
+export { salonLabel } from "./salons";
+
 /** 日本時間は UTC より9時間進んでいる（サマータイムなし） */
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -16,12 +20,15 @@ export const PERIOD_LABELS: Record<PeriodKey, string> = {
   custom: "日付を指定",
 };
 
-export type SalonKey = "all" | "PAUL" | "COCO";
+/** 管理画面の絞り込みで使う店舗の指定。"all" は全店 */
+export type SalonKey = "all" | SalonCode;
 
-export const SALON_LABELS: Record<SalonKey, string> = {
+/** 絞り込みボタンに並べる順番 */
+export const SALON_FILTER_KEYS: SalonKey[] = ["all", ...SALON_CODES];
+
+export const SALON_FILTER_LABELS: Record<SalonKey, string> = {
   all: "全店",
-  PAUL: "PAUL西葛西",
-  COCO: "COコ西葛西南口",
+  ...SALON_LABELS,
 };
 
 /** 日本時間の「その日の0時」を求める */

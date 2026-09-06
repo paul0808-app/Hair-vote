@@ -12,7 +12,7 @@ import {
   updateStyleAction,
 } from "@/app/admin/actions";
 import { formatBytes, prepareImages } from "@/lib/image-resize";
-import { SALON_LABELS, type AdminStyle, type SalonKey } from "@/lib/admin-shared";
+import { salonLabel, type AdminStyle } from "@/lib/admin-shared";
 
 export function StyleManager({
   adminKey,
@@ -72,7 +72,7 @@ export function StyleManager({
                   <p className="mt-0.5 truncate text-xs text-black/45">
                     {style.stylist ?? "担当なし"}
                     {" ・ "}
-                    {style.salon ? (SALON_LABELS[style.salon as SalonKey] ?? style.salon) : "共通"}
+                    {salonLabel(style.salon)}
                   </p>
 
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">

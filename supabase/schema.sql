@@ -15,7 +15,7 @@ create table if not exists styles (
   stylist       text,                    -- 担当スタイリスト
   caption       text,                    -- 説明文
   tags          text[],                  -- ハッシュタグ
-  salon         text,                    -- 'PAUL' | 'COCO' | null(共通)
+  salon         text,                    -- 'PAUL' | 'COCO' | 'GYOTOKU' | 'ALI_LEVEL' | null(共通)
   display_order int  not null default 0,
   is_active     boolean not null default true,
   created_at    timestamptz not null default now()

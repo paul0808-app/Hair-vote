@@ -1,7 +1,8 @@
 import Link from "next/link";
 import {
   PERIOD_LABELS,
-  SALON_LABELS,
+  SALON_FILTER_KEYS,
+  SALON_FILTER_LABELS,
   type PeriodKey,
   type SalonKey,
 } from "@/lib/admin-shared";
@@ -85,9 +86,9 @@ export function Filters({ adminKey, period, salon, from, to }: Props) {
       <div>
         <p className="mb-2 text-xs font-medium text-black/45">店舗</p>
         <div className="flex flex-wrap gap-2">
-          {(Object.keys(SALON_LABELS) as SalonKey[]).map((s) => (
+          {SALON_FILTER_KEYS.map((s) => (
             <Link key={s} href={link({ salon: s })} className={chipClass(s === salon)}>
-              {SALON_LABELS[s]}
+              {SALON_FILTER_LABELS[s]}
             </Link>
           ))}
         </div>

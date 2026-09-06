@@ -1,5 +1,6 @@
 "use server";
 
+import { parseSalonCode } from "@/lib/salons";
 import { getSupabase } from "@/lib/supabase";
 import { MAX_SELECTION } from "@/lib/types";
 
@@ -48,7 +49,8 @@ export async function submitVote(input: SubmitInput): Promise<SubmitResult> {
   const { data, error } = await supabase.rpc("submit_ballot", {
     p_session_id: sessionId,
     p_seat: seat,
-    p_salon: salon,
+    // 画面から送られてきた店舗名も、決められた店舗コードかどうか確かめる
+    p_salon: parseSalonCode(salon),
     p_style_ids: styleIds,
   });
 

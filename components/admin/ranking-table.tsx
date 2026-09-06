@@ -1,5 +1,5 @@
 import { Thumb } from "../thumb";
-import { SALON_LABELS, type RankingRow, type SalonKey } from "@/lib/admin-shared";
+import { salonLabel, type RankingRow } from "@/lib/admin-shared";
 
 /** 同じ得票数なら同じ順位にする（1,2,2,4 のような付け方） */
 function withRanks(rows: RankingRow[]): Array<RankingRow & { rank: number }> {
@@ -60,7 +60,7 @@ export function RankingTable({ rows }: { rows: RankingRow[] }) {
                 )}
                 {row.salon && (
                   <span className="ml-1.5 text-[11px] text-black/40">
-                    {SALON_LABELS[row.salon as SalonKey] ?? row.salon}
+                    {salonLabel(row.salon)}
                   </span>
                 )}
               </td>

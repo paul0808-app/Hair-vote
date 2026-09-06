@@ -1,3 +1,4 @@
+import { SALON_CODES, SALON_LABELS } from "@/lib/salons";
 import type { AdminStyle } from "@/lib/admin-shared";
 
 /** 追加フォームと編集フォームで共通の入力欄 */
@@ -53,9 +54,12 @@ export function StyleFormFields({ style }: { style?: AdminStyle }) {
       <label className={label}>
         店舗
         <select name="salon" defaultValue={style?.salon ?? ""} className={input}>
-          <option value="">共通（両店に表示）</option>
-          <option value="PAUL">PAUL西葛西</option>
-          <option value="COCO">COコ西葛西南口</option>
+          <option value="">共通（全店に表示）</option>
+          {SALON_CODES.map((code) => (
+            <option key={code} value={code}>
+              {SALON_LABELS[code]}
+            </option>
+          ))}
         </select>
       </label>
     </div>

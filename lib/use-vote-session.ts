@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { parseSalonCode } from "./salons";
 import { MAX_SELECTION, SESSION_EXPIRY_MS, type BallotStatus } from "./types";
 
 const STORAGE_KEY = "hairvote:session:v1";
@@ -14,7 +15,7 @@ type SessionState = {
   sessionId: string;
   /** 席番号（URLに ?seat=A1 と付いていれば入る） */
   seat: string | null;
-  /** 店舗（URLに ?salon=PAUL / ?salon=COCO と付いていれば入る） */
+  /** 店舗（URLに ?salon=PAUL のように付いていれば入る） */
   salon: string | null;
   /** 選んだ写真のID。並び順がそのまま選択順（1〜5番）になる */
   selectedIds: string[];
@@ -34,10 +35,9 @@ function createSession(seat: string | null, salon: string | null): SessionState 
   };
 }
 
-/** URLの ?salon= は 'PAUL' か 'COCO' のときだけ受け付ける */
+/** URLの ?salon= は、決められた店舗コードのときだけ受け付ける */
 function parseSalon(value: string | null): string | null {
-  const upper = value?.toUpperCase() ?? null;
-  return upper === "PAUL" || upper === "COCO" ? upper : null;
+  return parseSalonCode(value);
 }
 
 /** 保存されていた内容が壊れていないかを確かめる */

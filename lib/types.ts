@@ -1,13 +1,17 @@
-/** ヘアスタイル写真1枚ぶんのデータ。将来 Supabase の styles テーブルと同じ形にしてある */
+/**
+ * 投票画面に渡すヘアスタイル写真のデータ。
+ *
+ * 担当スタイリスト名は、お客様には見せない方針のため**この型に含めない**。
+ * スタイリスト名はデータベースには保存されており、管理画面の集計でのみ使う。
+ */
 export type Style = {
   id: string;
   imageUrl: string;
   thumbUrl?: string | null;
   title: string;
-  stylist?: string | null;
   caption?: string | null;
   tags?: string[] | null;
-  salon?: "PAUL" | "COCO" | null;
+  salon?: string | null;
   displayOrder: number;
   isActive: boolean;
 };

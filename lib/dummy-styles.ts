@@ -1,7 +1,8 @@
 import type { Style } from "./types";
 
 /**
- * フェーズ1用の仮データ（30件）。
+ * Supabase につながっていないときに表示する仮データ（30件）。
+ * 担当スタイリスト名は投票画面に出さない方針のため、ここでは持たせていない。
  * フェーズ3で Supabase の styles テーブルから取得する形に差し替えます。
  * 画像は picsum.photos のサンプル写真を使っています。
  */
@@ -52,7 +53,6 @@ export const DUMMY_STYLES: Style[] = SOURCE.map((s, i) => {
     imageUrl: `https://picsum.photos/seed/${seed}/900/900`,
     thumbUrl: `https://picsum.photos/seed/${seed}/450/450`,
     title: s.title,
-    stylist: s.stylist,
     caption: s.caption,
     tags: s.tags,
     salon: s.salon,

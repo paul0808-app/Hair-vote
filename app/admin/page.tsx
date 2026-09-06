@@ -6,6 +6,7 @@ import { StyleManager } from "@/components/admin/style-manager";
 import { SummaryCards } from "@/components/admin/summary-cards";
 import { checkAdminKey } from "@/lib/admin-auth";
 import {
+  SALON_FILTER_KEYS,
   getAdminData,
   getAllStyles,
   resolveRange,
@@ -39,7 +40,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     : "all";
 
   const salonParam = one(params.salon);
-  const salon: SalonKey = (["all", "PAUL", "COCO"] as const).includes(salonParam as SalonKey)
+  const salon: SalonKey = SALON_FILTER_KEYS.includes(salonParam as SalonKey)
     ? (salonParam as SalonKey)
     : "all";
 

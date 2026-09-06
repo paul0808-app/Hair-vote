@@ -3,13 +3,15 @@ import { DUMMY_STYLES } from "./dummy-styles";
 import { getSupabase } from "./supabase";
 import type { Style } from "./types";
 
-/** データベースの列名（snake_case）を、画面で使う名前に変換する */
+/**
+ * データベースの列名（snake_case）を、画面で使う名前に変換する。
+ * 担当スタイリスト名はお客様に見せないため、そもそも取得しない。
+ */
 type StyleRow = {
   id: string;
   image_url: string;
   thumb_url: string | null;
   title: string;
-  stylist: string | null;
   caption: string | null;
   tags: string[] | null;
   salon: string | null;
@@ -17,16 +19,18 @@ type StyleRow = {
   is_active: boolean;
 };
 
+/** 投票画面に渡してよい列だけを指定する（stylist は含めない） */
+const PUBLIC_COLUMNS = "id, image_url, thumb_url, title, caption, tags, salon, display_order, is_active";
+
 function toStyle(row: StyleRow): Style {
   return {
     id: row.id,
     imageUrl: row.image_url,
     thumbUrl: row.thumb_url,
     title: row.title,
-    stylist: row.stylist,
     caption: row.caption,
     tags: row.tags,
-    salon: row.salon === "PAUL" || row.salon === "COCO" ? row.salon : null,
+    salon: row.salon,
     displayOrder: row.display_order,
     isActive: row.is_active,
   };
@@ -50,7 +54,7 @@ export async function getStyles(): Promise<StylesResult> {
 
   const { data, error } = await supabase
     .from("styles")
-    .select("*")
+    .select(PUBLIC_COLUMNS)
     .eq("is_active", true)
     .order("display_order", { ascending: true });
 

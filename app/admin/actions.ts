@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { checkAdminKey } from "@/lib/admin-auth";
+import { parseSalonCode } from "@/lib/salons";
 import { getSupabase } from "@/lib/supabase";
 
 const BUCKET = "style-photos";
@@ -77,9 +78,7 @@ function parseTags(raw: string | null): string[] | null {
   return tags.length > 0 ? tags : null;
 }
 
-function parseSalon(raw: string | null): string | null {
-  return raw === "PAUL" || raw === "COCO" ? raw : null;
-}
+
 
 /** 写真を新しく登録する */
 export async function createStyleAction(form: FormData): Promise<ActionResult> {
@@ -124,7 +123,7 @@ export async function createStyleAction(form: FormData): Promise<ActionResult> {
     stylist: text(form, "stylist"),
     caption: text(form, "caption"),
     tags: parseTags(text(form, "tags")),
-    salon: parseSalon(text(form, "salon")),
+    salon: parseSalonCode(text(form, "salon")),
     display_order: nextOrder,
     is_active: true,
   });
@@ -159,7 +158,7 @@ export async function updateStyleAction(form: FormData): Promise<ActionResult> {
       stylist: text(form, "stylist"),
       caption: text(form, "caption"),
       tags: parseTags(text(form, "tags")),
-      salon: parseSalon(text(form, "salon")),
+      salon: parseSalonCode(text(form, "salon")),
     })
     .eq("id", id);
 

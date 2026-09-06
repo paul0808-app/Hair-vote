@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { checkAdminKey } from "@/lib/admin-auth";
 import {
   PERIOD_LABELS,
-  SALON_LABELS,
+  SALON_FILTER_KEYS,
+  SALON_FILTER_LABELS,
   getAdminData,
   resolveRange,
+  salonLabel,
   type PeriodKey,
   type SalonKey,
 } from "@/lib/admin";
@@ -31,7 +33,7 @@ export async function GET(request: Request) {
     : "all";
 
   const salonParam = url.searchParams.get("salon") ?? "all";
-  const salon: SalonKey = (["all", "PAUL", "COCO"] as const).includes(salonParam as SalonKey)
+  const salon: SalonKey = SALON_FILTER_KEYS.includes(salonParam as SalonKey)
     ? (salonParam as SalonKey)
     : "all";
 
@@ -46,7 +48,7 @@ export async function GET(request: Request) {
 
   const lines: string[] = [];
   lines.push(["集計期間", range.label].map(cell).join(","));
-  lines.push(["店舗", SALON_LABELS[salon]].map(cell).join(","));
+  lines.push(["店舗", SALON_FILTER_LABELS[salon]].map(cell).join(","));
   lines.push(["総投票数(人)", summary.totalBallots].map(cell).join(","));
   lines.push(["総いいね数", summary.totalVotes].map(cell).join(","));
   lines.push(["平均選択枚数", summary.avgVotes].map(cell).join(","));
@@ -68,7 +70,7 @@ export async function GET(request: Request) {
         rank,
         row.title,
         row.stylist ?? "",
-        row.salon ? (SALON_LABELS[row.salon as SalonKey] ?? row.salon) : "共通",
+        salonLabel(row.salon),
         row.votes,
         row.sharePercent,
         row.isActive ? "表示中" : "非表示",
