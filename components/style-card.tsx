@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Style } from "@/lib/types";
 
 type Props = {
@@ -13,14 +13,52 @@ type Props = {
   eager: boolean;
 };
 
-type ImageState = "loading" | "loaded" | "error";
+type ImageState = "loading" | "loaded" | "failed";
+
+/** これ以上待っても写真が来ないときは、スタイル名だけの表示に切り替える（ミリ秒） */
+const IMAGE_TIMEOUT_MS = 6000;
 
 export function StyleCard({ style, order, onOpen, eager }: Props) {
   const [imageState, setImageState] = useState<ImageState>("loading");
+  const cardRef = useRef<HTMLButtonElement>(null);
+  // このカードが画面に近づいたか（近づいてから読み込みの時間を計り始める）
+  const [nearViewport, setNearViewport] = useState(eager);
   const selected = order !== null;
+
+  useEffect(() => {
+    if (nearViewport) return;
+    const el = cardRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setNearViewport(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setNearViewport(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [nearViewport]);
+
+  // 一定時間たっても届かない写真は、待ち続けずスタイル名の表示に切り替える。
+  // 画像そのものは読み込みを続けているので、あとから届けば写真に差し替わる。
+  useEffect(() => {
+    if (!nearViewport || imageState !== "loading") return;
+    const timer = setTimeout(
+      () => setImageState((prev) => (prev === "loading" ? "failed" : prev)),
+      IMAGE_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [nearViewport, imageState]);
 
   return (
     <button
+      ref={cardRef}
       type="button"
       onClick={() => onOpen(style)}
       aria-pressed={selected}
@@ -37,8 +75,8 @@ export function StyleCard({ style, order, onOpen, eager }: Props) {
       {/* 読み込み中の薄いグレー */}
       {imageState === "loading" && <div className="absolute inset-0 placeholder-shimmer" />}
 
-      {/* 画像が届かなかったとき用の代わりの表示（壊れた画像アイコンを出さない） */}
-      {imageState === "error" && (
+      {/* 写真が届かないときの代わりの表示（壊れた画像アイコンは出さない） */}
+      {imageState === "failed" && (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-stone-200 to-stone-300 p-2">
           <span className="line-clamp-3 text-center text-[11px] font-medium text-stone-600 sm:text-sm">
             {style.title}
@@ -46,21 +84,19 @@ export function StyleCard({ style, order, onOpen, eager }: Props) {
         </div>
       )}
 
-      {imageState !== "error" && (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={style.thumbUrl ?? style.imageUrl}
-          alt={style.title}
-          loading={eager ? "eager" : "lazy"}
-          decoding="async"
-          onLoad={() => setImageState("loaded")}
-          onError={() => setImageState("error")}
-          className={[
-            "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
-            imageState === "loaded" ? "opacity-100" : "opacity-0",
-          ].join(" ")}
-        />
-      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={style.thumbUrl ?? style.imageUrl}
+        alt={style.title}
+        loading={eager ? "eager" : "lazy"}
+        decoding="async"
+        onLoad={() => setImageState("loaded")}
+        onError={() => setImageState("failed")}
+        className={[
+          "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
+          imageState === "loaded" ? "opacity-100" : "opacity-0",
+        ].join(" ")}
+      />
 
       {/* 選択中の薄い暗色オーバーレイ */}
       <div

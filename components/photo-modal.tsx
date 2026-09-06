@@ -13,20 +13,33 @@ type Props = {
   onToggle: (style: Style) => void;
 };
 
-/** スワイプと判定するの指の移動距離（px） */
+/** スワイプと判定する指の移動距離（px） */
 const SWIPE_X = 60;
 const SWIPE_Y = 90;
 
+/** これ以上待っても写真が来ないときは、スタイル名だけの表示に切り替える（ミリ秒） */
+const IMAGE_TIMEOUT_MS = 6000;
+
 export function PhotoModal({ styles, index, order, onClose, onMove, onToggle }: Props) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const [imageError, setImageError] = useState(false);
+  const [imageState, setImageState] = useState<"loading" | "loaded" | "failed">("loading");
 
   const isOpen = index !== null;
   const style = isOpen ? styles[index] : null;
   const selected = order !== null;
 
-  // 写真が切り替わったら、画像エラーの表示をリセットする
-  useEffect(() => setImageError(false), [index]);
+  // 写真が切り替わったら、読み込み状態をリセットする
+  useEffect(() => setImageState("loading"), [index]);
+
+  // 一定時間たっても届かない写真は、待ち続けずスタイル名の表示に切り替える
+  useEffect(() => {
+    if (imageState !== "loading") return;
+    const timer = setTimeout(
+      () => setImageState((prev) => (prev === "loading" ? "failed" : prev)),
+      IMAGE_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [imageState]);
 
   // モーダルを開いている間は、後ろのグリッドがスクロールしないようにする
   useEffect(() => {
@@ -115,19 +128,22 @@ export function PhotoModal({ styles, index, order, onClose, onMove, onToggle }: 
           className="relative flex h-full max-h-full items-center justify-center"
           onClick={(e) => e.stopPropagation()}
         >
-          {imageError ? (
+          {imageState !== "loaded" && (
             <div className="flex h-64 w-64 items-center justify-center rounded-2xl bg-stone-700 p-4 text-center text-sm text-stone-200 sm:h-80 sm:w-80">
-              {style.title}
+              {imageState === "failed" ? style.title : ""}
             </div>
-          ) : (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={style.imageUrl}
-              alt={style.title}
-              onError={() => setImageError(true)}
-              className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl"
-            />
           )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={style.imageUrl}
+            alt={style.title}
+            onLoad={() => setImageState("loaded")}
+            onError={() => setImageState("failed")}
+            className={[
+              "max-h-full max-w-full rounded-2xl object-contain shadow-2xl",
+              imageState === "loaded" ? "" : "hidden",
+            ].join(" ")}
+          />
         </div>
 
         <ArrowButton side="right" disabled={!hasNext} onClick={() => onMove(index + 1)} />
