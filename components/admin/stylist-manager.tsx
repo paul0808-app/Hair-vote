@@ -6,6 +6,7 @@ import { Toast } from "../toast";
 import {
   createStylistAction,
   createStylistsBulkAction,
+  deleteSampleStylistsAction,
   toggleStylistActiveAction,
   updateStylistAction,
 } from "@/app/admin/actions";
@@ -18,9 +19,12 @@ const inputClass =
 export function StylistManager({
   adminKey,
   stylists,
+  sampleStylistIds,
 }: {
   adminKey: string;
   stylists: AdminStylist[];
+  /** 担当写真がサンプルだけの、最初から入っていたスタイリスト */
+  sampleStylistIds: string[];
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -48,8 +52,31 @@ export function StylistManager({
   }));
   const noSalonCount = stylists.filter((s) => s.isActive && !s.salon).length;
 
+  const sampleNames = stylists
+    .filter((s) => sampleStylistIds.includes(s.id))
+    .map((s) => s.name);
+
   return (
     <div className="space-y-6">
+      {sampleNames.length > 0 && (
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-black/5 sm:p-5">
+          <h2 className="text-sm font-bold text-black/70">サンプルのスタイリストの片付け</h2>
+          <p className="mt-1.5 text-xs leading-relaxed text-black/50">
+            最初から入っていたサンプルのスタイリストが <strong>{sampleNames.length}人</strong>{" "}
+            残っています。担当しているのがサンプル写真だけの人なので、消しても実際のスタッフには影響しません。
+          </p>
+          <p className="mt-2 text-xs text-black/40">{sampleNames.join("、")}</p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(() => deleteSampleStylistsAction(adminKey))}
+            className="mt-3 w-full rounded-full bg-ink py-3 text-sm font-bold text-white active:scale-95 disabled:opacity-60 sm:w-auto sm:px-6"
+          >
+            {busy ? "処理中…" : `サンプルのスタイリスト ${sampleNames.length}人 を削除する`}
+          </button>
+        </section>
+      )}
+
       <section className="rounded-2xl bg-white p-4 ring-1 ring-black/5 sm:p-5">
         <h2 className="text-sm font-bold text-black/70">店舗賞の分母になる在籍人数</h2>
         <p className="mt-1.5 text-xs leading-relaxed text-black/50">

@@ -238,3 +238,34 @@ export async function getAllStylists(): Promise<{
   );
   return { stylists, error: null };
 }
+
+/**
+ * 担当している写真がサンプル写真だけのスタイリストを探す。
+ * 最初から入っていたサンプルの担当者を片付けるために使う。
+ */
+export async function getSampleStylistIds(): Promise<string[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("styles")
+    .select("image_url, stylist_id")
+    .not("stylist_id", "is", null);
+
+  if (error) {
+    console.error("[admin] サンプル担当者の調査に失敗:", error.message);
+    return [];
+  }
+
+  const summary = new Map<string, { total: number; samples: number }>();
+  for (const row of (data as Array<{ image_url: string; stylist_id: string }> | null) ?? []) {
+    const current = summary.get(row.stylist_id) ?? { total: 0, samples: 0 };
+    current.total += 1;
+    if (row.image_url.includes("picsum.photos")) current.samples += 1;
+    summary.set(row.stylist_id, current);
+  }
+
+  return [...summary.entries()]
+    .filter(([, counts]) => counts.samples > 0 && counts.samples === counts.total)
+    .map(([id]) => id);
+}

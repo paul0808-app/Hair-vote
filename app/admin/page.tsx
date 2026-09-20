@@ -17,6 +17,7 @@ import {
   getAllStylists,
   getResetAt,
   getSalonAward,
+  getSampleStylistIds,
   getStylistRanking,
   resolveRange,
   type PeriodKey,
@@ -74,6 +75,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     tab === "styles" ? getAllStyles() : Promise.resolve({ styles: [], error: null }),
     needsStylistList ? getAllStylists() : Promise.resolve({ stylists: [], error: null }),
   ]);
+
+  // サンプル由来のスタイリスト（名簿タブで片付けられるようにする）
+  const sampleStylistIds = tab === "stylists" ? await getSampleStylistIds() : [];
 
   // 写真の担当者として選べるのは、在籍中のスタイリストだけ
   const activeStylists = stylistsResult.stylists.filter((s) => s.isActive);
@@ -177,7 +181,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
           </section>
         </div>
       ) : tab === "stylists" ? (
-        <StylistManager adminKey={adminKey} stylists={stylistsResult.stylists} />
+        <StylistManager
+          adminKey={adminKey}
+          stylists={stylistsResult.stylists}
+          sampleStylistIds={sampleStylistIds}
+        />
       ) : (
         <StyleManager
           adminKey={adminKey}

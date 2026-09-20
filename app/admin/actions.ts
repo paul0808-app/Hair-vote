@@ -10,6 +10,9 @@ const BUCKET = "style-photos";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
 
+/** 最初から入っているサンプル写真かどうかの目印（配信元のアドレス） */
+const SAMPLE_IMAGE_HOST = "picsum.photos";
+
 /** アップロードできる写真の形式と大きさの上限 */
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
@@ -277,9 +280,6 @@ export async function undoResetAction(key: string): Promise<ActionResult> {
 
   return { ok: true, message: "リセットを取り消しました" };
 }
-
-/** 最初から入っているサンプル写真かどうかの目印（配信元のアドレス） */
-const SAMPLE_IMAGE_HOST = "picsum.photos";
 
 /**
  * サンプル写真をまとめて投票画面から隠す。
@@ -565,4 +565,69 @@ export async function createStylistsBulkAction(form: FormData): Promise<ActionRe
         ? `${toInsert.length}人を追加しました（${skipped}人はすでに登録済み）`
         : `${toInsert.length}人を名簿に追加しました`,
   };
+}
+
+/**
+ * サンプル由来のスタイリストを名簿から削除する。
+ *
+ * 「担当している写真がサンプル写真だけ」の人だけを対象にするので、
+ * あとから登録した実際のスタッフ（まだ写真を担当していない人を含む）は消えない。
+ * 削除の前に、サンプル写真側の担当者の結びつきを外す。
+ */
+export async function deleteSampleStylistsAction(key: string): Promise<ActionResult> {
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const { data, error } = await supabase
+    .from("styles")
+    .select("id, image_url, stylist_id")
+    .not("stylist_id", "is", null);
+
+  if (error) {
+    console.error("[admin] サンプル担当者の調査に失敗:", error.message);
+    return { ok: false, message: `削除できませんでした（${error.message}）` };
+  }
+
+  type Row = { id: string; image_url: string; stylist_id: string };
+  const rows = (data as Row[] | null) ?? [];
+
+  // スタイリストごとに「担当写真が全部サンプルかどうか」を調べる
+  const summary = new Map<string, { total: number; samples: number }>();
+  for (const row of rows) {
+    const current = summary.get(row.stylist_id) ?? { total: 0, samples: 0 };
+    current.total += 1;
+    if (row.image_url.includes(SAMPLE_IMAGE_HOST)) current.samples += 1;
+    summary.set(row.stylist_id, current);
+  }
+
+  const targetIds = [...summary.entries()]
+    .filter(([, counts]) => counts.samples > 0 && counts.samples === counts.total)
+    .map(([id]) => id);
+
+  if (targetIds.length === 0) {
+    return { ok: false, message: "削除できるサンプルのスタイリストはいませんでした" };
+  }
+
+  // 参照されたままだと消せないので、先に写真側の結びつきを外す
+  const { error: unlinkError } = await supabase
+    .from("styles")
+    .update({ stylist_id: null, stylist: null })
+    .in("stylist_id", targetIds);
+
+  if (unlinkError) {
+    console.error("[admin] 担当者の結びつき解除に失敗:", unlinkError.message);
+    return { ok: false, message: `削除できませんでした（${unlinkError.message}）` };
+  }
+
+  const { error: deleteError } = await supabase.from("stylists").delete().in("id", targetIds);
+  if (deleteError) {
+    console.error("[admin] サンプル担当者の削除に失敗:", deleteError.message);
+    return { ok: false, message: `削除できませんでした（${deleteError.message}）` };
+  }
+
+  revalidatePath("/");
+  return { ok: true, message: `サンプルのスタイリスト ${targetIds.length}人を削除しました` };
 }
