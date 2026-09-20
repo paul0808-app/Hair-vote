@@ -69,6 +69,20 @@ function text(form: FormData, name: string): string | null {
   return trimmed === "" ? null : trimmed;
 }
 
+/** 選ばれたスタイリストの名前を、名簿から引く。選ばれていなければ null */
+async function stylistName(
+  supabase: NonNullable<ReturnType<typeof getSupabase>>,
+  stylistId: string | null,
+): Promise<string | null> {
+  if (!stylistId) return null;
+  const { data } = await supabase
+    .from("stylists")
+    .select("name")
+    .eq("id", stylistId)
+    .maybeSingle();
+  return (data as { name?: string } | null)?.name ?? null;
+}
+
 /** 「#ボブ ロング,カラー」のような入力をタグの配列にする */
 function parseTags(raw: string | null): string[] | null {
   if (!raw) return null;
@@ -117,11 +131,14 @@ export async function createStyleAction(form: FormData): Promise<ActionResult> {
     .limit(1);
   const nextOrder = Number(last?.[0]?.display_order ?? 0) + 1;
 
+  const stylistId = text(form, "stylist_id");
   const { error } = await supabase.from("styles").insert({
     image_url: uploadedFull.url,
     thumb_url: thumbUrl,
     title,
-    stylist: text(form, "stylist"),
+    stylist_id: stylistId,
+    // 表示や書き出しをかんたんにするため、名前も一緒に持たせておく
+    stylist: await stylistName(supabase, stylistId),
     caption: text(form, "caption"),
     tags: parseTags(text(form, "tags")),
     salon: parseSalonCode(text(form, "salon")),
@@ -152,11 +169,13 @@ export async function updateStyleAction(form: FormData): Promise<ActionResult> {
   if (!id) return { ok: false, message: "対象が指定されていません" };
   if (!title) return { ok: false, message: "スタイル名を入力してください" };
 
+  const editStylistId = text(form, "stylist_id");
   const { error } = await supabase
     .from("styles")
     .update({
       title,
-      stylist: text(form, "stylist"),
+      stylist_id: editStylistId,
+      stylist: await stylistName(supabase, editStylistId),
       caption: text(form, "caption"),
       tags: parseTags(text(form, "tags")),
       salon: parseSalonCode(text(form, "salon")),
@@ -345,4 +364,98 @@ export async function shuffleStylesAction(key: string): Promise<ActionResult> {
 
   revalidatePath("/");
   return { ok: true, message: `${ids.length}枚の並び順をランダムにしました` };
+}
+
+// =====================================================================
+// スタイリスト名簿
+// =====================================================================
+
+/**
+ * スタイリストを名簿に追加する。
+ * 出品しないスタッフも登録しておくと、店舗賞の「1人あたり」の分母に含まれる。
+ */
+export async function createStylistAction(form: FormData): Promise<ActionResult> {
+  const key = String(form.get("key") ?? "");
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const name = text(form, "name");
+  if (!name) return { ok: false, message: "名前を入力してください" };
+
+  const { error } = await supabase.from("stylists").insert({
+    name,
+    salon: parseSalonCode(text(form, "salon")),
+    is_active: true,
+  });
+
+  if (error) {
+    console.error("[admin] スタイリストの追加に失敗:", error.message);
+    // 同じ名前がすでにある場合は、分かりやすい言葉で伝える
+    const message = error.message.includes("stylists_name_idx")
+      ? `「${name}」はすでに名簿にあります`
+      : `追加できませんでした（${error.message}）`;
+    return { ok: false, message };
+  }
+
+  revalidatePath("/");
+  return { ok: true, message: `「${name}」を名簿に追加しました` };
+}
+
+/** スタイリストの名前や所属店舗を直す */
+export async function updateStylistAction(form: FormData): Promise<ActionResult> {
+  const key = String(form.get("key") ?? "");
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const id = text(form, "id");
+  const name = text(form, "name");
+  if (!id) return { ok: false, message: "対象が指定されていません" };
+  if (!name) return { ok: false, message: "名前を入力してください" };
+
+  const { error } = await supabase
+    .from("stylists")
+    .update({ name, salon: parseSalonCode(text(form, "salon")) })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[admin] スタイリストの更新に失敗:", error.message);
+    return { ok: false, message: `保存できませんでした（${error.message}）` };
+  }
+
+  // 写真側に持っている担当者名の表示も合わせて直す
+  await supabase.from("styles").update({ stylist: name }).eq("stylist_id", id);
+
+  revalidatePath("/");
+  return { ok: true, message: "保存しました" };
+}
+
+/**
+ * 在籍・休止を切り替える。
+ * 休止にすると、写真の担当者の選択肢から外れ、店舗賞の分母にも入らなくなる。
+ * すでに登録済みの写真と、これまでの得票はそのまま残る。
+ */
+export async function toggleStylistActiveAction(
+  key: string,
+  id: string,
+  nextActive: boolean,
+): Promise<ActionResult> {
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const { error } = await supabase.from("stylists").update({ is_active: nextActive }).eq("id", id);
+  if (error) {
+    console.error("[admin] 在籍状態の変更に失敗:", error.message);
+    return { ok: false, message: `変更できませんでした（${error.message}）` };
+  }
+
+  return { ok: true, message: nextActive ? "在籍にもどしました" : "休止にしました" };
 }

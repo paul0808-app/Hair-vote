@@ -7,6 +7,8 @@ import {
   applyResetFloor,
   getAdminData,
   getResetAt,
+  getSalonAward,
+  getStylistRanking,
   resolveRange,
   salonLabel,
   type PeriodKey,
@@ -49,7 +51,11 @@ export async function GET(request: Request) {
     ),
     resetAt,
   );
-  const { ranking, summary, error } = await getAdminData(range, salon);
+  const [{ ranking, summary, error }, stylistRanking, salonAward] = await Promise.all([
+    getAdminData(range, salon),
+    getStylistRanking(range, salon),
+    getSalonAward(range),
+  ]);
 
   if (error) return new NextResponse(error, { status: 500 });
 
@@ -63,6 +69,7 @@ export async function GET(request: Request) {
     lines.push(["最終リセット", new Date(resetAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })].map(cell).join(","));
   }
   lines.push("");
+  lines.push(["【1】スタイル別（いいねが多い順）"].map(cell).join(","));
   lines.push(
     ["順位", "スタイル名", "スタイリスト", "店舗", "得票数", "得票率(%)", "投票画面での表示"]
       .map(cell)
@@ -85,6 +92,38 @@ export async function GET(request: Request) {
         row.sharePercent,
         row.isActive ? "表示中" : "非表示",
       ]
+        .map(cell)
+        .join(","),
+    );
+  });
+
+  // --- 表彰2：スタイリスト別 ---
+  lines.push("");
+  lines.push(["【2】スタイリスト別（合計いいね数が多い順）"].map(cell).join(","));
+  lines.push(["順位", "スタイリスト", "所属店舗", "出品数", "合計いいね"].map(cell).join(","));
+  lastVotes = null;
+  lastRank = 0;
+  stylistRanking.rows.forEach((row, index) => {
+    const rank = row.votes === lastVotes ? lastRank : index + 1;
+    lastVotes = row.votes;
+    lastRank = rank;
+    lines.push(
+      [rank, row.name, salonLabel(row.salon), row.styleCount, row.votes].map(cell).join(","),
+    );
+  });
+
+  // --- 表彰3：店舗賞 ---
+  lines.push("");
+  lines.push(["【3】店舗賞（1人あたりのいいね数が多い順）"].map(cell).join(","));
+  lines.push(["順位", "店舗", "合計いいね", "所属スタッフ数", "1人あたり"].map(cell).join(","));
+  let lastPer: number | null = null;
+  let lastPerRank = 0;
+  salonAward.rows.forEach((row, index) => {
+    const rank = row.votesPerStylist === lastPer ? lastPerRank : index + 1;
+    lastPer = row.votesPerStylist;
+    lastPerRank = rank;
+    lines.push(
+      [rank, salonLabel(row.salon), row.votes, row.stylistCount, row.votesPerStylist]
         .map(cell)
         .join(","),
     );

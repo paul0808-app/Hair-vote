@@ -127,6 +127,8 @@ export type AdminStyle = {
   thumbUrl: string | null;
   title: string;
   stylist: string | null;
+  /** 名簿のスタイリストへの結びつき */
+  stylistId: string | null;
   caption: string | null;
   tags: string[] | null;
   salon: string | null;
@@ -134,3 +136,31 @@ export type AdminStyle = {
   isActive: boolean;
 };
 
+
+/** 表彰2：スタイリスト別の集計 */
+export type StylistRankingRow = {
+  stylistId: string;
+  name: string;
+  salon: string | null;
+  /** 出品したスタイルの数 */
+  styleCount: number;
+  votes: number;
+};
+
+/** 表彰3：店舗賞の集計 */
+export type SalonAwardRow = {
+  salon: string;
+  /** 名簿に登録されている在籍スタッフの人数（これが割り算の分母） */
+  stylistCount: number;
+  votes: number;
+  votesPerStylist: number;
+};
+
+/** 管理画面で扱う、1人のスタイリスト */
+export type AdminStylist = {
+  id: string;
+  name: string;
+  salon: string | null;
+  displayOrder: number;
+  isActive: boolean;
+};

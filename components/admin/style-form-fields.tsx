@@ -1,8 +1,14 @@
-import { SALON_CODES, SALON_LABELS } from "@/lib/salons";
-import type { AdminStyle } from "@/lib/admin-shared";
+import { SALON_CODES, SALON_LABELS, salonLabel } from "@/lib/salons";
+import type { AdminStyle, AdminStylist } from "@/lib/admin-shared";
+
+type Props = {
+  style?: AdminStyle;
+  /** 担当者の選択肢（在籍中のスタイリスト） */
+  stylists: AdminStylist[];
+};
 
 /** 追加フォームと編集フォームで共通の入力欄 */
-export function StyleFormFields({ style }: { style?: AdminStyle }) {
+export function StyleFormFields({ style, stylists }: Props) {
   const label = "block text-xs font-medium text-black/50";
   const input =
     "mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2.5 text-base text-ink";
@@ -22,12 +28,18 @@ export function StyleFormFields({ style }: { style?: AdminStyle }) {
 
       <label className={label}>
         担当スタイリスト
-        <input
-          name="stylist"
-          defaultValue={style?.stylist ?? ""}
-          placeholder="例：田中 美咲"
-          className={input}
-        />
+        <select name="stylist_id" defaultValue={style?.stylistId ?? ""} className={input}>
+          <option value="">選択しない</option>
+          {stylists.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}（{salonLabel(s.salon)}）
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-[11px] font-normal text-black/35">
+          一覧に無いときは「スタイリスト」タブから追加してください。
+          お客様の画面には表示されません。
+        </span>
       </label>
 
       <label className={label}>
@@ -52,7 +64,7 @@ export function StyleFormFields({ style }: { style?: AdminStyle }) {
       </label>
 
       <label className={label}>
-        店舗
+        この写真を出す店舗
         <select name="salon" defaultValue={style?.salon ?? ""} className={input}>
           <option value="">共通（全店に表示）</option>
           {SALON_CODES.map((code) => (

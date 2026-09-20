@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Filters } from "@/components/admin/filters";
+import { SalonAwardTable, StylistRankingTable } from "@/components/admin/award-tables";
 import { RankingTable } from "@/components/admin/ranking-table";
+import { StylistManager } from "@/components/admin/stylist-manager";
 import { ResetPanel } from "@/components/admin/reset-panel";
 import { SalonUrls } from "@/components/admin/salon-urls";
 import { StyleManager } from "@/components/admin/style-manager";
@@ -12,7 +14,10 @@ import {
   applyResetFloor,
   getAdminData,
   getAllStyles,
+  getAllStylists,
   getResetAt,
+  getSalonAward,
+  getStylistRanking,
   resolveRange,
   type PeriodKey,
   type SalonKey,
@@ -51,17 +56,27 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
   const from = one(params.from);
   const to = one(params.to);
   const tabParam = one(params.tab);
-  const tab: "ranking" | "styles" | "urls" =
-    tabParam === "styles" || tabParam === "urls" ? tabParam : "ranking";
+  const tab: "ranking" | "styles" | "stylists" | "urls" =
+    tabParam === "styles" || tabParam === "urls" || tabParam === "stylists"
+      ? tabParam
+      : "ranking";
 
   const resetAt = await getResetAt();
   // リセットしてあれば、その日時より後だけを集計する
   const range = applyResetFloor(resolveRange(period, from, to), resetAt);
 
-  const [data, stylesResult] = await Promise.all([
+  const needsStylistList = tab === "styles" || tab === "stylists";
+
+  const [data, stylistRanking, salonAward, stylesResult, stylistsResult] = await Promise.all([
     getAdminData(range, salon),
+    tab === "ranking" ? getStylistRanking(range, salon) : Promise.resolve({ rows: [], error: null }),
+    tab === "ranking" ? getSalonAward(range) : Promise.resolve({ rows: [], error: null }),
     tab === "styles" ? getAllStyles() : Promise.resolve({ styles: [], error: null }),
+    needsStylistList ? getAllStylists() : Promise.resolve({ stylists: [], error: null }),
   ]);
+
+  // 写真の担当者として選べるのは、在籍中のスタイリストだけ
+  const activeStylists = stylistsResult.stylists.filter((s) => s.isActive);
 
   const tabLink = (next: typeof tab) => {
     const p = new URLSearchParams({ key: adminKey, period, salon, tab: next });
@@ -96,6 +111,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
           [
             ["ranking", "ランキング"],
             ["styles", "写真の管理"],
+            ["stylists", "スタイリスト"],
             ["urls", "店舗URL"],
           ] as const
         ).map(([value, label]) => (
@@ -112,9 +128,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
         ))}
       </nav>
 
-      {(data.error || stylesResult.error) && (
+      {(data.error || stylesResult.error || stylistsResult.error || stylistRanking.error) && (
         <p className="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
-          {data.error ?? stylesResult.error}
+          {data.error ?? stylesResult.error ?? stylistsResult.error ?? stylistRanking.error}
         </p>
       )}
 
@@ -126,21 +142,48 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
           <SummaryCards summary={data.summary} rangeLabel={range.label} />
           <ResetPanel adminKey={adminKey} resetAt={resetAt} />
 
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-black/70">ランキング</h2>
-              <a
-                href={csvHref}
-                className="rounded-full bg-white px-4 py-2 text-xs font-bold text-black/70 ring-1 ring-black/10 active:scale-95"
-              >
-                CSVをダウンロード
-              </a>
-            </div>
-            <RankingTable rows={data.ranking} />
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-black/70">コンテストの集計</h2>
+            <a
+              href={csvHref}
+              className="rounded-full bg-white px-4 py-2 text-xs font-bold text-black/70 ring-1 ring-black/10 active:scale-95"
+            >
+              CSVをダウンロード
+            </a>
           </div>
+
+          <section>
+            <h3 className="mb-2 text-sm font-bold">
+              <span className="mr-2 rounded-full bg-accent px-2.5 py-1 text-xs text-white">1</span>
+              スタイル別（いいねが多い順）
+            </h3>
+            <RankingTable rows={data.ranking} />
+          </section>
+
+          <section>
+            <h3 className="mb-2 text-sm font-bold">
+              <span className="mr-2 rounded-full bg-accent px-2.5 py-1 text-xs text-white">2</span>
+              スタイリスト別（合計いいね数が多い順）
+            </h3>
+            <StylistRankingTable rows={stylistRanking.rows} />
+          </section>
+
+          <section>
+            <h3 className="mb-2 text-sm font-bold">
+              <span className="mr-2 rounded-full bg-accent px-2.5 py-1 text-xs text-white">3</span>
+              店舗賞（1人あたりのいいね数が多い順）
+            </h3>
+            <SalonAwardTable rows={salonAward.rows} />
+          </section>
         </div>
+      ) : tab === "stylists" ? (
+        <StylistManager adminKey={adminKey} stylists={stylistsResult.stylists} />
       ) : (
-        <StyleManager adminKey={adminKey} styles={stylesResult.styles} />
+        <StyleManager
+          adminKey={adminKey}
+          styles={stylesResult.styles}
+          stylists={activeStylists}
+        />
       )}
     </div>
   );

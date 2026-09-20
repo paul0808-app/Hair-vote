@@ -264,3 +264,121 @@ create table if not exists app_settings (
 );
 
 alter table app_settings enable row level security;
+
+-- =====================================================================
+-- 11. スタイリスト名簿と、コンテストの集計
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- スタイリスト名簿。
+-- 写真を登録するときは、ここから選ぶ（手入力だと表記ゆれで別人扱いになるため）。
+--
+-- ★店舗賞の「所属スタッフ数」は、この名簿に登録されている人数を使う。
+--   出品していないスタッフも登録しておけば、その人数で割られる。
+-- ---------------------------------------------------------------------
+create table if not exists stylists (
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  salon         text,                    -- 所属店舗
+  display_order int  not null default 0,
+  is_active     boolean not null default true,
+  created_at    timestamptz not null default now()
+);
+
+create unique index if not exists stylists_name_idx on stylists (name);
+alter table stylists enable row level security;
+
+-- 写真がどのスタイリストのものかを結びつける
+alter table styles add column if not exists stylist_id uuid references stylists(id);
+create index if not exists styles_stylist_idx on styles (stylist_id);
+
+-- すでに手入力で登録済みの担当者名から、名簿を作って結びつける（初回だけ効く）。
+-- 同じ名前が複数の店舗のスタイルに付いていることがあるので、名前ごとに1人にまとめる。
+-- 所属店舗はあとから管理画面で直せる。
+insert into stylists (name, salon)
+select distinct on (s.stylist) s.stylist, s.salon
+from styles s
+where s.stylist is not null
+  and s.stylist <> ''
+  and not exists (select 1 from stylists t where t.name = s.stylist)
+order by s.stylist, s.display_order;
+
+update styles s
+set stylist_id = t.id
+from stylists t
+where s.stylist_id is null and s.stylist = t.name;
+
+-- ---------------------------------------------------------------------
+-- 表彰2：スタイリスト別（合計いいね数の多い順）
+-- ---------------------------------------------------------------------
+create or replace function admin_stylist_ranking(
+  p_from  timestamptz,
+  p_to    timestamptz,
+  p_salon text
+) returns table (
+  stylist_id  uuid,
+  name        text,
+  salon       text,
+  style_count bigint,
+  votes       bigint
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select t.id, t.name, t.salon,
+         count(distinct s.id) as style_count,
+         count(b.id)          as votes
+  from stylists t
+  left join styles s on s.stylist_id = t.id
+  left join votes  v on v.style_id = s.id
+  left join ballots b
+         on b.id = v.ballot_id
+        and b.status = 'submitted'
+        and (p_from is null or b.submitted_at >= p_from)
+        and (p_to   is null or b.submitted_at <  p_to)
+  where t.is_active
+    and (p_salon is null or t.salon = p_salon)
+  group by t.id
+  order by count(b.id) desc, t.name;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 表彰3：店舗賞（合計いいね数 ÷ 所属スタッフ数 ＝ 1人あたりいいね数）
+--        分母は stylists に登録されている在籍スタッフの人数。
+-- ---------------------------------------------------------------------
+create or replace function admin_salon_ranking(
+  p_from timestamptz,
+  p_to   timestamptz
+) returns table (
+  salon             text,
+  stylist_count     bigint,
+  votes             bigint,
+  votes_per_stylist numeric
+)
+language sql
+security definer
+set search_path = public
+as $$
+  with per_stylist as (
+    select t.id, t.salon, count(b.id) as votes
+    from stylists t
+    left join styles s on s.stylist_id = t.id
+    left join votes  v on v.style_id = s.id
+    left join ballots b
+           on b.id = v.ballot_id
+          and b.status = 'submitted'
+          and (p_from is null or b.submitted_at >= p_from)
+          and (p_to   is null or b.submitted_at <  p_to)
+    where t.is_active and t.salon is not null
+    group by t.id, t.salon
+  )
+  select salon,
+         count(*)    as stylist_count,
+         sum(votes)  as votes,
+         case when count(*) = 0 then 0
+              else round(sum(votes)::numeric / count(*), 2) end
+  from per_stylist
+  group by salon
+  order by 4 desc, 3 desc;
+$$;

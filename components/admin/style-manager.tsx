@@ -14,14 +14,17 @@ import {
   updateStyleAction,
 } from "@/app/admin/actions";
 import { formatBytes, prepareImages } from "@/lib/image-resize";
-import { salonLabel, type AdminStyle } from "@/lib/admin-shared";
+import { salonLabel, type AdminStyle, type AdminStylist } from "@/lib/admin-shared";
 
 export function StyleManager({
   adminKey,
   styles,
+  stylists,
 }: {
   adminKey: string;
   styles: AdminStyle[];
+  /** 担当者のプルダウンに出す、在籍中のスタイリスト */
+  stylists: AdminStylist[];
 }) {
   const router = useRouter();
   const [toast, setToast] = useState<string | null>(null);
@@ -69,7 +72,12 @@ export function StyleManager({
         </section>
       )}
 
-      <AddStyleForm adminKey={adminKey} onDone={notify} onSaved={() => router.refresh()} />
+      <AddStyleForm
+        adminKey={adminKey}
+        stylists={stylists}
+        onDone={notify}
+        onSaved={() => router.refresh()}
+      />
 
       <section>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -167,7 +175,7 @@ export function StyleManager({
                 >
                   <input type="hidden" name="key" value={adminKey} />
                   <input type="hidden" name="id" value={style.id} />
-                  <StyleFormFields style={style} />
+                  <StyleFormFields style={style} stylists={stylists} />
                   <button
                     type="submit"
                     disabled={busy}
@@ -190,10 +198,12 @@ export function StyleManager({
 /** 写真を新しく登録するフォーム */
 function AddStyleForm({
   adminKey,
+  stylists,
   onDone,
   onSaved,
 }: {
   adminKey: string;
+  stylists: AdminStylist[];
   onDone: (message: string) => void;
   onSaved: () => void;
 }) {
@@ -286,7 +296,7 @@ function AddStyleForm({
           </div>
         )}
 
-        <StyleFormFields />
+        <StyleFormFields stylists={stylists} />
 
         <button
           type="submit"

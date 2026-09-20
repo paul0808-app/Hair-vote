@@ -3,9 +3,12 @@ import { getSupabase } from "./supabase";
 import type {
   AdminData,
   AdminStyle,
+  AdminStylist,
   Range,
   RankingRow,
+  SalonAwardRow,
   SalonKey,
+  StylistRankingRow,
   Summary,
 } from "./admin-shared";
 
@@ -133,6 +136,7 @@ export async function getAllStyles(): Promise<{ styles: AdminStyle[]; error: str
       thumbUrl: (row.thumb_url as string | null) ?? null,
       title: String(row.title ?? ""),
       stylist: (row.stylist as string | null) ?? null,
+      stylistId: (row.stylist_id as string | null) ?? null,
       caption: (row.caption as string | null) ?? null,
       tags: (row.tags as string[] | null) ?? null,
       salon: (row.salon as string | null) ?? null,
@@ -142,4 +146,95 @@ export async function getAllStyles(): Promise<{ styles: AdminStyle[]; error: str
   );
 
   return { styles, error: null };
+}
+
+/** 表彰2：スタイリスト別ランキング（合計いいね数の多い順） */
+export async function getStylistRanking(
+  range: Range,
+  salon: SalonKey,
+): Promise<{ rows: StylistRankingRow[]; error: string | null }> {
+  const supabase = getSupabase();
+  if (!supabase) return { rows: [], error: "データベースに接続されていません" };
+
+  const { data, error } = await supabase.rpc("admin_stylist_ranking", {
+    p_from: range.from,
+    p_to: range.to,
+    // ここでの店舗は「スタイリストの所属店舗」で絞り込む
+    p_salon: salon === "all" ? null : salon,
+  });
+
+  if (error) {
+    console.error("[admin] スタイリスト別の集計に失敗:", error.message);
+    return { rows: [], error: `スタイリスト別の集計を取得できませんでした（${error.message}）` };
+  }
+
+  const rows: StylistRankingRow[] = ((data as Array<Record<string, unknown>> | null) ?? []).map(
+    (row) => ({
+      stylistId: String(row.stylist_id),
+      name: String(row.name ?? ""),
+      salon: (row.salon as string | null) ?? null,
+      styleCount: Number(row.style_count ?? 0),
+      votes: Number(row.votes ?? 0),
+    }),
+  );
+  return { rows, error: null };
+}
+
+/** 表彰3：店舗賞（合計いいね数 ÷ 所属スタッフ数） */
+export async function getSalonAward(
+  range: Range,
+): Promise<{ rows: SalonAwardRow[]; error: string | null }> {
+  const supabase = getSupabase();
+  if (!supabase) return { rows: [], error: "データベースに接続されていません" };
+
+  const { data, error } = await supabase.rpc("admin_salon_ranking", {
+    p_from: range.from,
+    p_to: range.to,
+  });
+
+  if (error) {
+    console.error("[admin] 店舗賞の集計に失敗:", error.message);
+    return { rows: [], error: `店舗賞の集計を取得できませんでした（${error.message}）` };
+  }
+
+  const rows: SalonAwardRow[] = ((data as Array<Record<string, unknown>> | null) ?? []).map(
+    (row) => ({
+      salon: String(row.salon ?? ""),
+      stylistCount: Number(row.stylist_count ?? 0),
+      votes: Number(row.votes ?? 0),
+      votesPerStylist: Number(row.votes_per_stylist ?? 0),
+    }),
+  );
+  return { rows, error: null };
+}
+
+/** スタイリスト名簿を、休止中の人も含めて全件取得する */
+export async function getAllStylists(): Promise<{
+  stylists: AdminStylist[];
+  error: string | null;
+}> {
+  const supabase = getSupabase();
+  if (!supabase) return { stylists: [], error: "データベースに接続されていません" };
+
+  const { data, error } = await supabase
+    .from("stylists")
+    .select("*")
+    .order("salon", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.error("[admin] スタイリスト名簿の取得に失敗:", error.message);
+    return { stylists: [], error: `名簿を取得できませんでした（${error.message}）` };
+  }
+
+  const stylists: AdminStylist[] = ((data as Array<Record<string, unknown>> | null) ?? []).map(
+    (row) => ({
+      id: String(row.id),
+      name: String(row.name ?? ""),
+      salon: (row.salon as string | null) ?? null,
+      displayOrder: Number(row.display_order ?? 0),
+      isActive: Boolean(row.is_active),
+    }),
+  );
+  return { stylists, error: null };
 }
