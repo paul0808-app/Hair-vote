@@ -296,3 +296,53 @@ export async function hideSampleStylesAction(key: string): Promise<ActionResult>
         : `サンプル写真 ${count} 枚を投票画面から隠しました`,
   };
 }
+
+/**
+ * 登録済みの写真の並び順をランダムに入れ替える。
+ * 押すたびに違う並びになる。
+ *
+ * データベース側の関数は使わず、アプリ側で新しい順番を決めて書き込んでいる。
+ * 並び順は万一途中で失敗しても作り直せる情報なので、この方法で十分。
+ */
+export async function shuffleStylesAction(key: string): Promise<ActionResult> {
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const { data, error } = await supabase.from("styles").select("id");
+  if (error) {
+    console.error("[admin] 並び替えの準備に失敗:", error.message);
+    return { ok: false, message: `並び替えできませんでした（${error.message}）` };
+  }
+
+  const ids = ((data as Array<{ id: string }> | null) ?? []).map((row) => row.id);
+  if (ids.length < 2) {
+    return { ok: false, message: "並び替えるには写真が2枚以上必要です" };
+  }
+
+  // 後ろから1つずつ、ランダムに選んだ要素と入れ替えていく（偏りのない混ぜ方）
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+
+  const results = await Promise.all(
+    ids.map((id, index) =>
+      supabase.from("styles").update({ display_order: index + 1 }).eq("id", id),
+    ),
+  );
+
+  const failed = results.filter((r) => r.error).length;
+  if (failed > 0) {
+    console.error("[admin] 並び替えの一部に失敗:", results.find((r) => r.error)?.error?.message);
+    return {
+      ok: false,
+      message: `${failed}件の並び替えに失敗しました。もう一度お試しください`,
+    };
+  }
+
+  revalidatePath("/");
+  return { ok: true, message: `${ids.length}枚の並び順をランダムにしました` };
+}

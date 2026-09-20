@@ -9,6 +9,7 @@ import {
   createStyleAction,
   hideSampleStylesAction,
   moveStyleAction,
+  shuffleStylesAction,
   toggleActiveAction,
   updateStyleAction,
 } from "@/app/admin/actions";
@@ -71,12 +72,25 @@ export function StyleManager({
       <AddStyleForm adminKey={adminKey} onDone={notify} onSaved={() => router.refresh()} />
 
       <section>
-        <h2 className="mb-2 text-sm font-bold text-black/70">
-          登録済みのスタイル（{styles.length}件）
-        </h2>
-        <p className="mb-3 text-xs text-black/45">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-bold text-black/70">
+            登録済みのスタイル（{styles.length}件）
+          </h2>
+          <button
+            type="button"
+            disabled={busy || styles.length < 2}
+            onClick={() => run(() => shuffleStylesAction(adminKey))}
+            className="rounded-full bg-black/8 px-4 py-2 text-xs font-bold text-black/70 active:scale-95 disabled:opacity-40"
+          >
+            {busy ? "処理中…" : "並び順をランダムにする"}
+          </button>
+        </div>
+        <p className="mb-3 text-xs leading-relaxed text-black/45">
           上の矢印で投票画面での並び順を変えられます。「非表示」にすると投票画面から消えますが、
           過去の得票数は残ります。
+          <br />
+          「並び順をランダムにする」は押すたびに並びが変わります。
+          いつも同じ写真が上にあると票が集まりやすいので、ときどき混ぜ直すと結果が偏りにくくなります。
         </p>
 
         <ul className="space-y-2">
