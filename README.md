@@ -91,16 +91,19 @@
 
 各店舗のタブレットは、次のURLを開いておきます（席番号は任意）。
 
-| 店舗 | 店舗コード | タブレットで開くURL |
-|---|---|---|
-| PAUL | `PAUL` | `https://〇〇.vercel.app/?salon=PAUL&seat=A1` |
-| COコ | `COCO` | `https://〇〇.vercel.app/?salon=COCO&seat=A1` |
-| 行徳 | `GYOTOKU` | `https://〇〇.vercel.app/?salon=GYOTOKU&seat=A1` |
-| Ali&LEVEL | `ALI_LEVEL` | `https://〇〇.vercel.app/?salon=ALI_LEVEL&seat=A1` |
+| 店舗 | 店舗コード | 席数 | タブレットで開くURL（1席目の例） |
+|---|---|---|---|
+| PAUL | `PAUL` | 8席 | `https://〇〇.vercel.app/?salon=PAUL&seat=1` |
+| COコ | `COCO` | 6席 | `https://〇〇.vercel.app/?salon=COCO&seat=1` |
+| 行徳 | `GYOTOKU` | 4席 | `https://〇〇.vercel.app/?salon=GYOTOKU&seat=1` |
+| Ali&LEVEL | `ALI_LEVEL` | 7席 | `https://〇〇.vercel.app/?salon=ALI_LEVEL&seat=1` |
+
+全25席ぶんのURLは、管理画面の「店舗URL」タブに一覧で並びます。
+席が増減したときは `lib/salons.ts` の `SALON_SEAT_COUNTS` の数字を変えてください。
 
 `?salon=` を付けずに開いても投票はできます（店舗が未記録になるだけです）。
 
-> 店舗を増やしたい・表示名を変えたいときは `lib/salons.ts` の1か所を直すだけで、
+> 店舗を増やしたい・表示名や席数を変えたいときは `lib/salons.ts` の1か所を直すだけで、
 > 投票URL・管理画面の絞り込み・写真の登録フォーム・CSV のすべてに反映されます。
 
 ### タブレットをアプリのように使う（PWA）
@@ -287,7 +290,9 @@ alter table app_settings enable row level security;
 - [ ] もう一度2回タップすると解除される
 
 ### タブレットの設定（店舗ごとに1回だけ）
-- [ ] 管理画面 → **「店舗URL」** タブ → 使う店舗・席のURLの「コピー」
+- [ ] 管理画面 → **「店舗URL」** タブに、PAUL 8席・COコ 6席・Ali&LEVEL 7席・行徳 4席の
+      合計25席ぶんのURLが並んでいる
+- [ ] 使う席のURLの「コピー」（または「○席ぶんまとめてコピー」）を押す
 - [ ] タブレットのSafariでそのURLを開く
 - [ ] 共有ボタン（□に↑）→ **「ホーム画面に追加」** → 「追加」
 - [ ] アイコンから開くと、アドレスバーが出ない全画面になる

@@ -17,6 +17,17 @@ export const SALON_LABELS: Record<SalonCode, string> = {
   ALI_LEVEL: "Ali&LEVEL",
 };
 
+/**
+ * 店舗ごとの席数。管理画面の「店舗URL」タブで、この数だけURLを並べる。
+ * 席が増えたらここの数字を変えるだけでよい。
+ */
+export const SALON_SEAT_COUNTS: Record<SalonCode, number> = {
+  PAUL: 8,
+  COCO: 6,
+  GYOTOKU: 4,
+  ALI_LEVEL: 7,
+};
+
 /** URLや入力欄から来た文字列を、正しい店舗コードに直す。該当しなければ null */
 export function parseSalonCode(value: string | null | undefined): SalonCode | null {
   if (!value) return null;
