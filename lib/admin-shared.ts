@@ -134,6 +134,8 @@ export type AdminStyle = {
   salon: string | null;
   displayOrder: number;
   isActive: boolean;
+  /** これまでに入った票の数（期間で絞らない合計）。削除の確認に使う */
+  voteCount: number;
 };
 
 

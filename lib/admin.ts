@@ -119,14 +119,26 @@ export async function getAllStyles(): Promise<{ styles: AdminStyle[]; error: str
   const supabase = getSupabase();
   if (!supabase) return { styles: [], error: "データベースに接続されていません" };
 
-  const { data, error } = await supabase
-    .from("styles")
-    .select("*")
-    .order("display_order", { ascending: true });
+  // 写真の一覧と、写真ごとの得票数をまとめて取る。
+  // 得票数は「この写真を消すと何票消えるか」を確認してもらうために使う。
+  const [stylesResult, votesResult] = await Promise.all([
+    supabase.from("styles").select("*").order("display_order", { ascending: true }),
+    supabase.from("votes").select("style_id"),
+  ]);
 
+  const { data, error } = stylesResult;
   if (error) {
     console.error("[admin] スタイル一覧の取得に失敗:", error.message);
     return { styles: [], error: `一覧を取得できませんでした（${error.message}）` };
+  }
+
+  const voteCounts = new Map<string, number>();
+  if (votesResult.error) {
+    console.error("[admin] 得票数の取得に失敗:", votesResult.error.message);
+  } else {
+    for (const row of (votesResult.data as Array<{ style_id: string }> | null) ?? []) {
+      voteCounts.set(row.style_id, (voteCounts.get(row.style_id) ?? 0) + 1);
+    }
   }
 
   const styles: AdminStyle[] = ((data as Array<Record<string, unknown>> | null) ?? []).map(
@@ -142,6 +154,7 @@ export async function getAllStyles(): Promise<{ styles: AdminStyle[]; error: str
       salon: (row.salon as string | null) ?? null,
       displayOrder: Number(row.display_order ?? 0),
       isActive: Boolean(row.is_active),
+      voteCount: voteCounts.get(String(row.id)) ?? 0,
     }),
   );
 

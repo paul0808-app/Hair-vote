@@ -7,6 +7,8 @@ import { Thumb } from "../thumb";
 import { Toast } from "../toast";
 import {
   createStyleAction,
+  deleteSampleStylesAction,
+  deleteStyleAction,
   hideSampleStylesAction,
   moveStyleAction,
   shuffleStylesAction,
@@ -29,6 +31,8 @@ export function StyleManager({
   const router = useRouter();
   const [toast, setToast] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // 削除の確認中の写真。うっかり消さないよう、2段階にしている
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [busy, startAction] = useTransition();
 
   const notify = (message: string) => setToast(message);
@@ -39,36 +43,51 @@ export function StyleManager({
       notify(result.message);
       if (result.ok) {
         setEditingId(null);
+        setDeletingId(null);
         router.refresh();
       }
     });
   };
 
-  // 最初から入っているサンプル写真（外部サービス配信ぶん）がまだ表示されているか
-  const visibleSamples = styles.filter(
-    (s) => s.isActive && s.imageUrl.includes("picsum.photos"),
-  ).length;
+  // 最初から入っているサンプル写真（外部サービス配信ぶん）
+  const samples = styles.filter((s) => s.imageUrl.includes("picsum.photos"));
+  const visibleSamples = samples.filter((s) => s.isActive).length;
 
   return (
     <div className="space-y-6">
-      {visibleSamples > 0 && (
+      {samples.length > 0 && (
         <section className="rounded-2xl bg-white p-4 ring-1 ring-black/5 sm:p-5">
           <h2 className="text-sm font-bold text-black/70">サンプル写真の片付け</h2>
           <p className="mt-1.5 text-xs leading-relaxed text-black/50">
-            最初から入っているサンプル写真が <strong>{visibleSamples}枚</strong> 表示されています。
+            最初から入っているサンプル写真が <strong>{samples.length}枚</strong> 登録されています
+            （うち投票画面に出ているのは {visibleSamples}枚）。
             サンプルは外部の無料サービスから配信されているため表示が遅く、
             投票画面全体の読み込みを重くします。
-            <br />
-            実際の写真を登録できたら、まとめて隠してください（得票データは残ります）。
           </p>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => run(() => hideSampleStylesAction(adminKey))}
-            className="mt-3 w-full rounded-full bg-ink py-3 text-sm font-bold text-white active:scale-95 disabled:opacity-60 sm:w-auto sm:px-6"
-          >
-            {busy ? "処理中…" : `サンプル写真 ${visibleSamples}枚 をまとめて非表示にする`}
-          </button>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            {visibleSamples > 0 && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => run(() => hideSampleStylesAction(adminKey))}
+                className="rounded-full bg-ink px-6 py-3 text-sm font-bold text-white active:scale-95 disabled:opacity-60"
+              >
+                {busy ? "処理中…" : `${visibleSamples}枚 をまとめて非表示にする`}
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run(() => deleteSampleStylesAction(adminKey))}
+              className="rounded-full bg-black/8 px-6 py-3 text-sm font-bold text-black/70 active:scale-95 disabled:opacity-60"
+            >
+              {busy ? "処理中…" : `サンプル写真 ${samples.length}枚 をまとめて完全に削除する`}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-black/40">
+            「非表示」は投票画面から隠すだけで、あとから戻せます。
+            「完全に削除」は取り消せません。
+          </p>
         </section>
       )}
 
@@ -96,6 +115,9 @@ export function StyleManager({
         <p className="mb-3 text-xs leading-relaxed text-black/45">
           上の矢印で投票画面での並び順を変えられます。「非表示」にすると投票画面から消えますが、
           過去の得票数は残ります。
+          <br />
+          「削除」は写真も票も完全に消します（取り消せません）。
+          票を残したいときは「非表示にする」を使ってください。
           <br />
           「並び順をランダムにする」は押すたびに並びが変わります。
           いつも同じ写真が上にあると票が集まりやすいので、ときどき混ぜ直すと結果が偏りにくくなります。
@@ -164,9 +186,56 @@ export function StyleManager({
                     >
                       {editingId === style.id ? "閉じる" : "編集"}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingId(deletingId === style.id ? null : style.id)}
+                      className="rounded-lg bg-black/6 px-3 py-1.5 text-xs font-medium text-accent-dark"
+                    >
+                      削除
+                    </button>
                   </div>
                 </div>
               </div>
+
+              {deletingId === style.id && (
+                <div className="mt-4 rounded-xl bg-accent/8 p-3">
+                  <p className="text-xs leading-relaxed text-black/70">
+                    <strong>「{style.title}」を完全に削除します。</strong>
+                    <br />
+                    {style.voteCount > 0 ? (
+                      <>
+                        この写真には
+                        <strong className="text-accent-dark">{style.voteCount}票</strong>
+                        入っています。削除するとその票も消え、ランキングの集計から外れます。
+                        <br />
+                        票を残したまま投票画面から消すだけなら「非表示にする」を使ってください。
+                      </>
+                    ) : (
+                      <>まだ票は入っていません。</>
+                    )}
+                    <br />
+                    この操作は取り消せません。
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeletingId(null)}
+                      disabled={busy}
+                      className="flex-1 rounded-full bg-black/8 py-2.5 text-xs font-bold text-black/60 disabled:opacity-50"
+                    >
+                      やめる
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => run(() => deleteStyleAction(adminKey, style.id))}
+                      disabled={busy}
+                      className="flex-[1.4] rounded-full bg-accent py-2.5 text-xs font-bold text-white active:scale-95 disabled:opacity-60"
+                    >
+                      {busy ? "削除中…" : "完全に削除する"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {editingId === style.id && (
                 <form

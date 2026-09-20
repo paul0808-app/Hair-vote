@@ -631,3 +631,138 @@ export async function deleteSampleStylistsAction(key: string): Promise<ActionRes
   revalidatePath("/");
   return { ok: true, message: `サンプルのスタイリスト ${targetIds.length}人を削除しました` };
 }
+
+/**
+ * アップロードした写真のファイルを保存場所から取り出すための道筋を求める。
+ * サンプル写真のように外部から配信されているものは対象外（null を返す）。
+ */
+function storagePath(url: string | null): string | null {
+  if (!url) return null;
+  const marker = `/storage/v1/object/public/${BUCKET}/`;
+  const index = url.indexOf(marker);
+  if (index === -1) return null;
+  return url.slice(index + marker.length);
+}
+
+/** 写真そのものを保存場所から消す。消せなくても登録の削除は続ける */
+async function removeStoredImages(
+  supabase: NonNullable<ReturnType<typeof getSupabase>>,
+  urls: Array<string | null>,
+): Promise<void> {
+  const paths = urls.map(storagePath).filter((p): p is string => p !== null);
+  if (paths.length === 0) return;
+  const { error } = await supabase.storage.from(BUCKET).remove(paths);
+  if (error) console.error("[admin] 画像ファイルの削除に失敗:", error.message);
+}
+
+/**
+ * 票が1つも残っていない投票データを片付ける。
+ * 写真を消すとその票も消えるため、中身が空の投票が残ってしまうのを防ぐ。
+ * （投票は必ず1票以上と一緒に作られるので、空のものは取り残しだけ）
+ */
+async function removeEmptyBallots(
+  supabase: NonNullable<ReturnType<typeof getSupabase>>,
+): Promise<void> {
+  const [ballotsResult, votesResult] = await Promise.all([
+    supabase.from("ballots").select("id"),
+    supabase.from("votes").select("ballot_id"),
+  ]);
+  if (ballotsResult.error || votesResult.error) return;
+
+  const alive = new Set(
+    ((votesResult.data as Array<{ ballot_id: string }> | null) ?? []).map((r) => r.ballot_id),
+  );
+  const empty = ((ballotsResult.data as Array<{ id: string }> | null) ?? [])
+    .map((r) => r.id)
+    .filter((id) => !alive.has(id));
+
+  if (empty.length === 0) return;
+  const { error } = await supabase.from("ballots").delete().in("id", empty);
+  if (error) console.error("[admin] 空の投票の片付けに失敗:", error.message);
+}
+
+/**
+ * 写真を完全に削除する。
+ * その写真に入っていた票も一緒に消えるので、画面側で得票数を見せて確認してもらう。
+ */
+export async function deleteStyleAction(key: string, id: string): Promise<ActionResult> {
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const { data: target, error: readError } = await supabase
+    .from("styles")
+    .select("title, image_url, thumb_url")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (readError) {
+    console.error("[admin] 削除対象の確認に失敗:", readError.message);
+    return { ok: false, message: `削除できませんでした（${readError.message}）` };
+  }
+  if (!target) return { ok: false, message: "その写真は見つかりませんでした" };
+
+  const style = target as { title: string; image_url: string; thumb_url: string | null };
+
+  // 票が残っていると写真を消せないので、先に票を消す
+  const { error: voteError } = await supabase.from("votes").delete().eq("style_id", id);
+  if (voteError) {
+    console.error("[admin] 票の削除に失敗:", voteError.message);
+    return { ok: false, message: `削除できませんでした（${voteError.message}）` };
+  }
+
+  const { error: deleteError } = await supabase.from("styles").delete().eq("id", id);
+  if (deleteError) {
+    console.error("[admin] 写真の削除に失敗:", deleteError.message);
+    return { ok: false, message: `削除できませんでした（${deleteError.message}）` };
+  }
+
+  await removeStoredImages(supabase, [style.image_url, style.thumb_url]);
+  await removeEmptyBallots(supabase);
+
+  revalidatePath("/");
+  return { ok: true, message: `「${style.title}」を削除しました` };
+}
+
+/** サンプル写真をまとめて完全に削除する */
+export async function deleteSampleStylesAction(key: string): Promise<ActionResult> {
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const { data, error } = await supabase
+    .from("styles")
+    .select("id")
+    .like("image_url", `%${SAMPLE_IMAGE_HOST}%`);
+
+  if (error) {
+    console.error("[admin] サンプル写真の確認に失敗:", error.message);
+    return { ok: false, message: `削除できませんでした（${error.message}）` };
+  }
+
+  const ids = ((data as Array<{ id: string }> | null) ?? []).map((row) => row.id);
+  if (ids.length === 0) {
+    return { ok: false, message: "削除できるサンプル写真はありませんでした" };
+  }
+
+  const { error: voteError } = await supabase.from("votes").delete().in("style_id", ids);
+  if (voteError) {
+    console.error("[admin] 票の削除に失敗:", voteError.message);
+    return { ok: false, message: `削除できませんでした（${voteError.message}）` };
+  }
+
+  const { error: deleteError } = await supabase.from("styles").delete().in("id", ids);
+  if (deleteError) {
+    console.error("[admin] サンプル写真の削除に失敗:", deleteError.message);
+    return { ok: false, message: `削除できませんでした（${deleteError.message}）` };
+  }
+
+  await removeEmptyBallots(supabase);
+
+  revalidatePath("/");
+  return { ok: true, message: `サンプル写真 ${ids.length}枚 を削除しました` };
+}
