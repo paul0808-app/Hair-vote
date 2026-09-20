@@ -459,3 +459,75 @@ export async function toggleStylistActiveAction(
 
   return { ok: true, message: nextActive ? "在籍にもどしました" : "休止にしました" };
 }
+
+/** 一度にまとめて登録できる人数の上限 */
+const MAX_BULK_STYLISTS = 200;
+
+/**
+ * スタイリストをまとめて名簿に登録する。
+ * 1行に1人ずつ書いた名前を受け取り、すでにいる人は飛ばして追加する。
+ */
+export async function createStylistsBulkAction(form: FormData): Promise<ActionResult> {
+  const key = String(form.get("key") ?? "");
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const raw = form.get("names");
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return { ok: false, message: "名前を1行に1人ずつ入力してください" };
+  }
+
+  // 前後の空白だけ取り除き、名前そのもの（姓と名の間の空白など）はそのまま残す
+  const names = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+
+  if (names.length === 0) {
+    return { ok: false, message: "名前を1行に1人ずつ入力してください" };
+  }
+  if (names.length > MAX_BULK_STYLISTS) {
+    return { ok: false, message: `一度に登録できるのは${MAX_BULK_STYLISTS}人までです` };
+  }
+
+  // 入力の中での重複を先にまとめる
+  const unique = [...new Set(names)];
+  const salon = parseSalonCode(text(form, "salon"));
+
+  const { data: existingRows, error: readError } = await supabase.from("stylists").select("name");
+  if (readError) {
+    console.error("[admin] 名簿の読み取りに失敗:", readError.message);
+    return { ok: false, message: `登録できませんでした（${readError.message}）` };
+  }
+
+  const existing = new Set(
+    ((existingRows as Array<{ name: string }> | null) ?? []).map((row) => row.name),
+  );
+  const toInsert = unique.filter((name) => !existing.has(name));
+  const skipped = unique.length - toInsert.length;
+
+  if (toInsert.length === 0) {
+    return { ok: false, message: `${skipped}人とも、すでに名簿にありました` };
+  }
+
+  const { error } = await supabase
+    .from("stylists")
+    .insert(toInsert.map((name) => ({ name, salon, is_active: true })));
+
+  if (error) {
+    console.error("[admin] まとめて登録に失敗:", error.message);
+    return { ok: false, message: `登録できませんでした（${error.message}）` };
+  }
+
+  revalidatePath("/");
+  return {
+    ok: true,
+    message:
+      skipped > 0
+        ? `${toInsert.length}人を追加しました（${skipped}人はすでに登録済み）`
+        : `${toInsert.length}人を名簿に追加しました`,
+  };
+}
