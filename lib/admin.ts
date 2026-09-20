@@ -14,6 +14,43 @@ export * from "./admin-shared";
 
 const EMPTY_SUMMARY: Summary = { totalBallots: 0, totalVotes: 0, avgVotes: 0 };
 
+/** 集計のリセット日時を保存しておく名前 */
+export const RESET_KEY = "ranking_reset_at";
+
+/**
+ * 最後に集計をリセットした日時。まだ一度もリセットしていなければ null。
+ * 投票データは消していないので、この日時を消せば元の集計に戻る。
+ */
+export async function getResetAt(): Promise<string | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", RESET_KEY)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[admin] リセット日時の取得に失敗:", error.message);
+    return null;
+  }
+  const value = (data as { value?: string } | null)?.value;
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
+/**
+ * リセット日時より前は数えないよう、集計する期間の開始点を引き上げる。
+ * 「日付を指定」で過去を選んだ場合も、リセット後だけが対象になる。
+ */
+export function applyResetFloor(range: Range, resetAt: string | null): Range {
+  if (!resetAt) return range;
+  const floor = Date.parse(resetAt);
+  if (Number.isNaN(floor)) return range;
+  const from = range.from ? Math.max(Date.parse(range.from), floor) : floor;
+  return { ...range, from: new Date(from).toISOString() };
+}
+
 /** 管理画面のランキングとサマリーを取得する。常に最新を読む */
 export async function getAdminData(range: Range, salon: SalonKey): Promise<AdminData> {
   const supabase = getSupabase();

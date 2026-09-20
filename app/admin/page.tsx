@@ -2,14 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Filters } from "@/components/admin/filters";
 import { RankingTable } from "@/components/admin/ranking-table";
+import { ResetPanel } from "@/components/admin/reset-panel";
 import { SalonUrls } from "@/components/admin/salon-urls";
 import { StyleManager } from "@/components/admin/style-manager";
 import { SummaryCards } from "@/components/admin/summary-cards";
 import { checkAdminKey } from "@/lib/admin-auth";
 import {
   SALON_FILTER_KEYS,
+  applyResetFloor,
   getAdminData,
   getAllStyles,
+  getResetAt,
   resolveRange,
   type PeriodKey,
   type SalonKey,
@@ -51,7 +54,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
   const tab: "ranking" | "styles" | "urls" =
     tabParam === "styles" || tabParam === "urls" ? tabParam : "ranking";
 
-  const range = resolveRange(period, from, to);
+  const resetAt = await getResetAt();
+  // リセットしてあれば、その日時より後だけを集計する
+  const range = applyResetFloor(resolveRange(period, from, to), resetAt);
 
   const [data, stylesResult] = await Promise.all([
     getAdminData(range, salon),
@@ -119,6 +124,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
         <div className="space-y-6">
           <Filters adminKey={adminKey} period={period} salon={salon} from={from} to={to} />
           <SummaryCards summary={data.summary} rangeLabel={range.label} />
+          <ResetPanel adminKey={adminKey} resetAt={resetAt} />
 
           <div>
             <div className="mb-2 flex items-center justify-between">

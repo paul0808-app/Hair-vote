@@ -4,7 +4,9 @@ import {
   PERIOD_LABELS,
   SALON_FILTER_KEYS,
   SALON_FILTER_LABELS,
+  applyResetFloor,
   getAdminData,
+  getResetAt,
   resolveRange,
   salonLabel,
   type PeriodKey,
@@ -37,10 +39,15 @@ export async function GET(request: Request) {
     ? (salonParam as SalonKey)
     : "all";
 
-  const range = resolveRange(
-    period,
-    url.searchParams.get("from") ?? undefined,
-    url.searchParams.get("to") ?? undefined,
+  const resetAt = await getResetAt();
+  // 管理画面の表示と同じ期間になるよう、リセット日時より後だけを対象にする
+  const range = applyResetFloor(
+    resolveRange(
+      period,
+      url.searchParams.get("from") ?? undefined,
+      url.searchParams.get("to") ?? undefined,
+    ),
+    resetAt,
   );
   const { ranking, summary, error } = await getAdminData(range, salon);
 
@@ -52,6 +59,9 @@ export async function GET(request: Request) {
   lines.push(["総投票数(人)", summary.totalBallots].map(cell).join(","));
   lines.push(["総いいね数", summary.totalVotes].map(cell).join(","));
   lines.push(["平均選択枚数", summary.avgVotes].map(cell).join(","));
+  if (resetAt) {
+    lines.push(["最終リセット", new Date(resetAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })].map(cell).join(","));
+  }
   lines.push("");
   lines.push(
     ["順位", "スタイル名", "スタイリスト", "店舗", "得票数", "得票率(%)", "投票画面での表示"]

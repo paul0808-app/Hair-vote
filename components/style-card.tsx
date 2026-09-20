@@ -7,8 +7,10 @@ type Props = {
   style: Style;
   /** 選択順（1〜5）。未選択なら null */
   order: number | null;
-  /** 写真をタップしたとき。拡大モーダルを開く */
+  /** 1回タップしたとき。拡大モーダルを開く */
   onOpen: (style: Style) => void;
+  /** 2回続けてタップしたとき。拡大せずに選択・解除する */
+  onToggle: (style: Style) => void;
   /** 最初に画面に見えている数枚だけ先に読み込む */
   eager: boolean;
 };
@@ -18,9 +20,14 @@ type ImageState = "loading" | "loaded" | "failed";
 /** これ以上待っても写真が来ないときは、スタイル名だけの表示に切り替える（ミリ秒） */
 const IMAGE_TIMEOUT_MS = 6000;
 
-export function StyleCard({ style, order, onOpen, eager }: Props) {
+/** この時間内にもう一度タップされたら「2タップ」とみなす（ミリ秒） */
+const DOUBLE_TAP_MS = 260;
+
+export function StyleCard({ style, order, onOpen, onToggle, eager }: Props) {
   const [imageState, setImageState] = useState<ImageState>("loading");
   const cardRef = useRef<HTMLButtonElement>(null);
+  // 1回目のタップを少し待ち、その間に2回目が来たかどうかで動作を分ける
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // このカードが画面に近づいたか（近づいてから読み込みの時間を計り始める）
   const [nearViewport, setNearViewport] = useState(eager);
   const selected = order !== null;
@@ -45,6 +52,28 @@ export function StyleCard({ style, order, onOpen, eager }: Props) {
     return () => observer.disconnect();
   }, [nearViewport]);
 
+  // 画面から離れるときに、待機中のタップを片付ける
+  useEffect(
+    () => () => {
+      if (tapTimer.current) clearTimeout(tapTimer.current);
+    },
+    [],
+  );
+
+  const handleTap = () => {
+    if (tapTimer.current) {
+      // 2回目のタップ：拡大せず、その場で選択・解除する
+      clearTimeout(tapTimer.current);
+      tapTimer.current = null;
+      onToggle(style);
+      return;
+    }
+    tapTimer.current = setTimeout(() => {
+      tapTimer.current = null;
+      onOpen(style);
+    }, DOUBLE_TAP_MS);
+  };
+
   // 一定時間たっても届かない写真は、待ち続けずスタイル名の表示に切り替える。
   // 画像そのものは読み込みを続けているので、あとから届けば写真に差し替わる。
   useEffect(() => {
@@ -60,9 +89,11 @@ export function StyleCard({ style, order, onOpen, eager }: Props) {
     <button
       ref={cardRef}
       type="button"
-      onClick={() => onOpen(style)}
+      onClick={handleTap}
       aria-pressed={selected}
-      aria-label={`${style.title} を大きく見る${selected ? `（${order}番目に選択中）` : ""}`}
+      aria-label={`${style.title}${selected ? `（${order}番目に選択中）` : ""}。1回タップで拡大、2回タップで選択`}
+      // ダブルタップで画面が拡大してしまうのを防ぐ
+      style={{ touchAction: "manipulation" }}
       className={[
         "group relative block w-full aspect-square overflow-hidden rounded-xl bg-black/5",
         "transition-transform duration-100 active:scale-[0.97]",

@@ -248,3 +248,19 @@ begin
   update styles set display_order = v_a where id = p_b;
 end;
 $$;
+
+-- ---------------------------------------------------------------------
+-- 10. アプリの設定を1件ずつ保存しておく場所
+--     いまは「集計のリセット日時」を入れるために使う。
+--
+--     リセットしても投票データそのものは消さず、
+--     「この日時より後だけを数える」という開始点を記録するだけにしている。
+--     こうすることで、間違えて押しても元に戻せる。
+-- ---------------------------------------------------------------------
+create table if not exists app_settings (
+  key        text primary key,
+  value      text,
+  updated_at timestamptz not null default now()
+);
+
+alter table app_settings enable row level security;

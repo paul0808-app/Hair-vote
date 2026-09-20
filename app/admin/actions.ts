@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { RESET_KEY } from "@/lib/admin";
 import { checkAdminKey } from "@/lib/admin-auth";
 import { parseSalonCode } from "@/lib/salons";
 import { getSupabase } from "@/lib/supabase";
@@ -213,4 +214,47 @@ export async function moveStyleAction(
 
   revalidatePath("/");
   return { ok: true, message: "並び順を変更しました" };
+}
+
+/**
+ * 集計をリセットする（投票数・いいね数・ランキングを0に戻す）。
+ *
+ * 投票データそのものは消さず、「ここから先を数える」という開始点を記録するだけ。
+ * 押し間違えても undoResetAction で元に戻せる。
+ */
+export async function resetCountsAction(key: string): Promise<ActionResult> {
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key: RESET_KEY, value: now, updated_at: now }, { onConflict: "key" });
+
+  if (error) {
+    console.error("[admin] リセットに失敗:", error.message);
+    return { ok: false, message: `リセットできませんでした（${error.message}）` };
+  }
+
+  return { ok: true, message: "集計をリセットしました" };
+}
+
+/** 直前のリセットを取り消して、これまでの集計に戻す */
+export async function undoResetAction(key: string): Promise<ActionResult> {
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const { error } = await supabase.from("app_settings").delete().eq("key", RESET_KEY);
+  if (error) {
+    console.error("[admin] リセットの取り消しに失敗:", error.message);
+    return { ok: false, message: `取り消せませんでした（${error.message}）` };
+  }
+
+  return { ok: true, message: "リセットを取り消しました" };
 }

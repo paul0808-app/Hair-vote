@@ -70,7 +70,7 @@ export function VoteScreen({
           好きなヘアスタイルを選んでください
         </h1>
         <p className="mt-1.5 text-sm text-black/55 sm:text-base">
-          写真をタップすると大きく見られます。最大5枚まで「いいね」できます
+          写真を1回タップで大きく表示、2回タップでそのまま選択できます（最大5枚）
         </p>
       </header>
 
@@ -86,6 +86,7 @@ export function VoteScreen({
                 // 復元が終わるまでは未選択として描画し、表示のちらつきを防ぐ
                 order={ready && position >= 0 ? position + 1 : null}
                 onOpen={() => setModalIndex(index)}
+                onToggle={handleToggle}
                 eager={index < 10}
               />
             );
