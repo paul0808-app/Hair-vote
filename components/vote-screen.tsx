@@ -75,6 +75,17 @@ export function VoteScreen({
       </header>
 
       <main className="mx-auto max-w-7xl px-3 sm:px-6">
+        {/* 写真が1枚も登録されていないとき（スタッフへの案内） */}
+        {styles.length === 0 && (
+          <p className="mx-auto max-w-md rounded-2xl bg-white px-6 py-12 text-center text-sm leading-relaxed text-black/50 ring-1 ring-black/5">
+            ただいま準備中です。
+            <br />
+            <span className="mt-2 block text-xs text-black/35">
+              管理画面の「写真の管理」から写真を登録してください。
+            </span>
+          </p>
+        )}
+
         {/* 写真グリッド：スマホ3列／タブレット4列／iPad横5列 */}
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5 lg:gap-4">
           {styles.map((style, index) => {

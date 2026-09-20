@@ -62,9 +62,11 @@ export async function getStyles(): Promise<StylesResult> {
     console.error("[styles] 取得に失敗したため仮データを表示します:", error.message);
     return { styles: DUMMY_STYLES, usingDummyData: true };
   }
+  // データベースにはつながっているが、表示できる写真が1枚も無い状態。
+  // ここで仮データに切り替えると、隠したはずのサンプルが出てしまうので出さない。
   if (!data || data.length === 0) {
-    console.warn("[styles] styles テーブルが空です。seed.sql を実行してください。");
-    return { styles: DUMMY_STYLES, usingDummyData: true };
+    console.warn("[styles] 表示中のスタイルが1件もありません。管理画面から写真を登録してください。");
+    return { styles: [], usingDummyData: false };
   }
 
   return { styles: (data as StyleRow[]).map(toStyle), usingDummyData: false };

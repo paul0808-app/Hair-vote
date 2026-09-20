@@ -7,6 +7,7 @@ import { Thumb } from "../thumb";
 import { Toast } from "../toast";
 import {
   createStyleAction,
+  hideSampleStylesAction,
   moveStyleAction,
   toggleActiveAction,
   updateStyleAction,
@@ -39,8 +40,34 @@ export function StyleManager({
     });
   };
 
+  // 最初から入っているサンプル写真（外部サービス配信ぶん）がまだ表示されているか
+  const visibleSamples = styles.filter(
+    (s) => s.isActive && s.imageUrl.includes("picsum.photos"),
+  ).length;
+
   return (
     <div className="space-y-6">
+      {visibleSamples > 0 && (
+        <section className="rounded-2xl bg-white p-4 ring-1 ring-black/5 sm:p-5">
+          <h2 className="text-sm font-bold text-black/70">サンプル写真の片付け</h2>
+          <p className="mt-1.5 text-xs leading-relaxed text-black/50">
+            最初から入っているサンプル写真が <strong>{visibleSamples}枚</strong> 表示されています。
+            サンプルは外部の無料サービスから配信されているため表示が遅く、
+            投票画面全体の読み込みを重くします。
+            <br />
+            実際の写真を登録できたら、まとめて隠してください（得票データは残ります）。
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(() => hideSampleStylesAction(adminKey))}
+            className="mt-3 w-full rounded-full bg-ink py-3 text-sm font-bold text-white active:scale-95 disabled:opacity-60 sm:w-auto sm:px-6"
+          >
+            {busy ? "処理中…" : `サンプル写真 ${visibleSamples}枚 をまとめて非表示にする`}
+          </button>
+        </section>
+      )}
+
       <AddStyleForm adminKey={adminKey} onDone={notify} onSaved={() => router.refresh()} />
 
       <section>

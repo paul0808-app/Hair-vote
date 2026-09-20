@@ -258,3 +258,41 @@ export async function undoResetAction(key: string): Promise<ActionResult> {
 
   return { ok: true, message: "リセットを取り消しました" };
 }
+
+/** 最初から入っているサンプル写真かどうかの目印（配信元のアドレス） */
+const SAMPLE_IMAGE_HOST = "picsum.photos";
+
+/**
+ * サンプル写真をまとめて投票画面から隠す。
+ * サンプルは外部の無料サービスから配信されていて表示が遅いため、
+ * 実際の写真が揃ったら一度に片付けられるようにしておく。
+ */
+export async function hideSampleStylesAction(key: string): Promise<ActionResult> {
+  const denied = guard(key);
+  if (denied) return denied;
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: "データベースに接続されていません" };
+
+  const { data, error } = await supabase
+    .from("styles")
+    .update({ is_active: false })
+    .like("image_url", `%${SAMPLE_IMAGE_HOST}%`)
+    .eq("is_active", true)
+    .select("id");
+
+  if (error) {
+    console.error("[admin] サンプル写真の非表示に失敗:", error.message);
+    return { ok: false, message: `変更できませんでした（${error.message}）` };
+  }
+
+  const count = (data as unknown[] | null)?.length ?? 0;
+  revalidatePath("/");
+  return {
+    ok: true,
+    message:
+      count === 0
+        ? "非表示にできるサンプル写真はありませんでした"
+        : `サンプル写真 ${count} 枚を投票画面から隠しました`,
+  };
+}

@@ -15,22 +15,39 @@ type Props = {
   eager: boolean;
 };
 
-type ImageState = "loading" | "loaded" | "failed";
+/**
+ * 写真の読み込み状態。
+ * "waiting" は「まだ届かないのでスタイル名を出しているが、読み込みは続けている」状態。
+ * 届いた時点で "loaded" になり、写真に切り替わる。
+ */
+type ImageState = "loading" | "loaded" | "waiting";
 
-/** これ以上待っても写真が来ないときは、スタイル名だけの表示に切り替える（ミリ秒） */
-const IMAGE_TIMEOUT_MS = 6000;
+/** これ以上待つならスタイル名を先に出す（ミリ秒）。読み込みは止めない */
+const SHOW_TITLE_AFTER_MS = 3500;
+
+/** 読み込みに失敗したときに、間隔を空けて試し直す回数と待ち時間 */
+const MAX_RETRIES = 4;
+const RETRY_DELAYS_MS = [1200, 2500, 5000, 10000];
 
 /** この時間内にもう一度タップされたら「2タップ」とみなす（ミリ秒） */
 const DOUBLE_TAP_MS = 260;
 
 export function StyleCard({ style, order, onOpen, onToggle, eager }: Props) {
   const [imageState, setImageState] = useState<ImageState>("loading");
+  /** 何回目の試行か。srcに付けて、ブラウザに取得し直させる */
+  const [attempt, setAttempt] = useState(0);
   const cardRef = useRef<HTMLButtonElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   // 1回目のタップを少し待ち、その間に2回目が来たかどうかで動作を分ける
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // このカードが画面に近づいたか（近づいてから読み込みの時間を計り始める）
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // このカードが画面に近づいたか（近づいてから待ち時間を計り始める）
   const [nearViewport, setNearViewport] = useState(eager);
+
   const selected = order !== null;
+  const baseUrl = style.thumbUrl ?? style.imageUrl;
+  // 試し直すときだけ印を付ける。付けないとブラウザが失敗を覚えていて再取得しない
+  const src = attempt === 0 ? baseUrl : `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}r=${attempt}`;
 
   useEffect(() => {
     if (nearViewport) return;
@@ -46,19 +63,59 @@ export function StyleCard({ style, order, onOpen, onToggle, eager }: Props) {
           observer.disconnect();
         }
       },
-      { rootMargin: "300px" },
+      { rootMargin: "400px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, [nearViewport]);
 
-  // 画面から離れるときに、待機中のタップを片付ける
+  // しばらく届かないときは、先にスタイル名を出す。読み込み自体は続けている
+  useEffect(() => {
+    if (!nearViewport || imageState !== "loading") return;
+    const timer = setTimeout(
+      () => setImageState((prev) => (prev === "loading" ? "waiting" : prev)),
+      SHOW_TITLE_AFTER_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [nearViewport, imageState]);
+
+  // 画面から離れるときに、待機中の処理を片付ける
   useEffect(
     () => () => {
       if (tapTimer.current) clearTimeout(tapTimer.current);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
     },
     [],
   );
+
+  /**
+   * 画面が動き出す前に読み込みが終わっていた場合、完了や失敗の合図を
+   * 受け取れずに固まってしまう。表示のたびに実際の状態を直接確かめる。
+   */
+  useEffect(() => {
+    const el = imgRef.current;
+    if (!el || !el.complete) return;
+    if (el.naturalWidth > 0) {
+      setImageState("loaded");
+    } else {
+      handleErrorRef.current();
+    }
+    // 試行ごとに確かめたいので attempt を見る
+  }, [attempt]);
+
+  /** 読み込みに失敗したとき。あきらめずに間隔を空けて試し直す */
+  const handleError = () => {
+    setImageState("waiting");
+    if (attempt >= MAX_RETRIES) return;
+    retryTimer.current = setTimeout(
+      () => setAttempt((n) => n + 1),
+      RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)],
+    );
+  };
+
+  // 上のチェックから最新の処理を呼べるようにしておく
+  const handleErrorRef = useRef(handleError);
+  handleErrorRef.current = handleError;
 
   const handleTap = () => {
     if (tapTimer.current) {
@@ -73,17 +130,6 @@ export function StyleCard({ style, order, onOpen, onToggle, eager }: Props) {
       onOpen(style);
     }, DOUBLE_TAP_MS);
   };
-
-  // 一定時間たっても届かない写真は、待ち続けずスタイル名の表示に切り替える。
-  // 画像そのものは読み込みを続けているので、あとから届けば写真に差し替わる。
-  useEffect(() => {
-    if (!nearViewport || imageState !== "loading") return;
-    const timer = setTimeout(
-      () => setImageState((prev) => (prev === "loading" ? "failed" : prev)),
-      IMAGE_TIMEOUT_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [nearViewport, imageState]);
 
   return (
     <button
@@ -103,11 +149,9 @@ export function StyleCard({ style, order, onOpen, onToggle, eager }: Props) {
           : "ring-1 ring-black/5",
       ].join(" ")}
     >
-      {/* 読み込み中の薄いグレー */}
+      {/* 届くまでのあいだの表示。薄いグレー → しばらくしたらスタイル名 */}
       {imageState === "loading" && <div className="absolute inset-0 placeholder-shimmer" />}
-
-      {/* 写真が届かないときの代わりの表示（壊れた画像アイコンは出さない） */}
-      {imageState === "failed" && (
+      {imageState === "waiting" && (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-stone-200 to-stone-300 p-2">
           <span className="line-clamp-3 text-center text-[11px] font-medium text-stone-600 sm:text-sm">
             {style.title}
@@ -115,14 +159,21 @@ export function StyleCard({ style, order, onOpen, onToggle, eager }: Props) {
         </div>
       )}
 
+      {/*
+        画像は常に置いたままにしてある。スタイル名を出している間も読み込みは続いていて、
+        届いた時点で onLoad が動き、自動的に写真へ切り替わる。
+      */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={style.thumbUrl ?? style.imageUrl}
+        key={attempt}
+        ref={imgRef}
+        src={src}
         alt={style.title}
         loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "auto"}
         decoding="async"
         onLoad={() => setImageState("loaded")}
-        onError={() => setImageState("failed")}
+        onError={handleError}
         className={[
           "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
           imageState === "loaded" ? "opacity-100" : "opacity-0",
