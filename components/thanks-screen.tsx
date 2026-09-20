@@ -11,7 +11,7 @@ type Props = {
 /** 投票が終わったあとの「ありがとうございました」画面 */
 export function ThanksScreen({ selected, onReset }: Props) {
   return (
-    <div className="mx-auto flex min-h-dvh max-w-4xl flex-col items-center px-5 pt-12 pb-8 text-center sm:pt-20">
+    <div className="kiosk mx-auto flex min-h-dvh max-w-4xl flex-col items-center px-5 pt-12 pb-8 text-center sm:pt-20">
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 sm:h-20 sm:w-20">
         <svg viewBox="0 0 24 24" className="h-9 w-9 text-accent sm:h-11 sm:w-11" aria-hidden="true">
           <path

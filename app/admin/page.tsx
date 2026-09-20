@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Filters } from "@/components/admin/filters";
 import { RankingTable } from "@/components/admin/ranking-table";
+import { SalonUrls } from "@/components/admin/salon-urls";
 import { StyleManager } from "@/components/admin/style-manager";
 import { SummaryCards } from "@/components/admin/summary-cards";
 import { checkAdminKey } from "@/lib/admin-auth";
@@ -46,7 +47,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
 
   const from = one(params.from);
   const to = one(params.to);
-  const tab = one(params.tab) === "styles" ? "styles" : "ranking";
+  const tabParam = one(params.tab);
+  const tab: "ranking" | "styles" | "urls" =
+    tabParam === "styles" || tabParam === "urls" ? tabParam : "ranking";
 
   const range = resolveRange(period, from, to);
 
@@ -55,7 +58,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     tab === "styles" ? getAllStyles() : Promise.resolve({ styles: [], error: null }),
   ]);
 
-  const tabLink = (next: "ranking" | "styles") => {
+  const tabLink = (next: typeof tab) => {
     const p = new URLSearchParams({ key: adminKey, period, salon, tab: next });
     if (period === "custom") {
       if (from) p.set("from", from);
@@ -88,6 +91,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
           [
             ["ranking", "ランキング"],
             ["styles", "写真の管理"],
+            ["urls", "店舗URL"],
           ] as const
         ).map(([value, label]) => (
           <Link
@@ -109,7 +113,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
         </p>
       )}
 
-      {tab === "ranking" ? (
+      {tab === "urls" ? (
+        <SalonUrls />
+      ) : tab === "ranking" ? (
         <div className="space-y-6">
           <Filters adminKey={adminKey} period={period} salon={salon} from={from} to={to} />
           <SummaryCards summary={data.summary} rangeLabel={range.label} />

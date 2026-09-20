@@ -5,6 +5,36 @@ import { parseSalonCode } from "./salons";
 import { MAX_SELECTION, SESSION_EXPIRY_MS, type BallotStatus } from "./types";
 
 const STORAGE_KEY = "hairvote:session:v1";
+/**
+ * このタブレット自身の設定（店舗と席番号）。投票が終わっても消さない。
+ * ホーム画面に追加したアイコンから開くと `?salon=...` が付かないため、
+ * 一度URLで指定した店舗・席番号を端末が覚えておく必要がある。
+ */
+const DEVICE_KEY = "hairvote:device:v1";
+
+type DeviceConfig = { seat: string | null; salon: string | null };
+
+function readDeviceConfig(): DeviceConfig {
+  try {
+    const raw = window.localStorage.getItem(DEVICE_KEY);
+    if (!raw) return { seat: null, salon: null };
+    const v = JSON.parse(raw) as Partial<DeviceConfig>;
+    return {
+      seat: typeof v?.seat === "string" ? v.seat : null,
+      salon: typeof v?.salon === "string" ? v.salon : null,
+    };
+  } catch {
+    return { seat: null, salon: null };
+  }
+}
+
+function writeDeviceConfig(config: DeviceConfig): void {
+  try {
+    window.localStorage.setItem(DEVICE_KEY, JSON.stringify(config));
+  } catch {
+    // 保存できなくても投票そのものは続けられる
+  }
+}
 
 /** 選択操作の結果。画面側でお知らせ（トースト）を出すかどうかの判断に使う */
 export type SelectResult = "selected" | "unselected" | "limit-reached";
@@ -80,8 +110,17 @@ export function useVoteSession() {
   // 最初の1回だけ：URLの席番号・店舗を読み、保存済みセッションを復元する
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const seat = params.get("seat");
-    const salon = parseSalon(params.get("salon"));
+    const urlSeat = params.get("seat");
+    const urlSalon = parseSalon(params.get("salon"));
+
+    // URLに指定があればこの端末の設定として覚え、次回以降はそれを使う
+    const saved = readDeviceConfig();
+    const seat = urlSeat ?? saved.seat;
+    const salon = urlSalon ?? saved.salon;
+    if (urlSeat !== null || urlSalon !== null) {
+      writeDeviceConfig({ seat, salon });
+    }
+
     seatRef.current = seat;
     salonRef.current = salon;
 

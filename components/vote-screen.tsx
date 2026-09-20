@@ -64,7 +64,7 @@ export function VoteScreen({
   }
 
   return (
-    <>
+    <div className="kiosk">
       <header className="mx-auto max-w-7xl px-3 pt-5 pb-3 text-center sm:px-6 sm:pt-8">
         <h1 className="text-xl font-bold tracking-tight sm:text-3xl">
           好きなヘアスタイルを選んでください
@@ -133,6 +133,6 @@ export function VoteScreen({
         count={ready ? selectedIds.length : 0}
         onProceed={() => setConfirmOpen(true)}
       />
-    </>
+    </div>
   );
 }

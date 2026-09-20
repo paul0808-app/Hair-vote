@@ -14,6 +14,19 @@ body {
   color: var(--color-ink);
   /* iOS Safari で長押ししたときのハイライトを消す */
   -webkit-tap-highlight-color: transparent;
+  /* 画面の端で引っぱったときの跳ね返りや、引き下げての再読み込みを止める */
+  overscroll-behavior-y: none;
+}
+
+/*
+ * 据え置きタブレット向けの調整。
+ * 写真を長押ししてもメニューが出ず、文字が選択されないようにして、
+ * お客様が誤操作しにくいようにする。管理画面には適用しない。
+ */
+.kiosk {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* 画像が読み込まれる前に出す、薄いグレーのプレースホルダー */
