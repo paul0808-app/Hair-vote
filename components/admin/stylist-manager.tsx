@@ -224,8 +224,11 @@ function BulkAddForm({
       <h2 className="text-sm font-bold text-black/70">名簿をまとめて登録する</h2>
       <p className="mt-1.5 text-xs leading-relaxed text-black/50">
         名前を<strong className="text-black/70">1行に1人ずつ</strong>貼り付けてください。
-        所属店舗は、この回に登録する全員に付きます。
-        <strong className="text-black/70">店舗ごとに分けて</strong>登録してください。
+        <br />
+        行の先頭に店舗名を書いておけば（例：
+        <code className="rounded bg-black/6 px-1">COコ　松本　尚弥</code>
+        ）、<strong className="text-black/70">全店まとめて1回で登録できます</strong>。
+        店舗名を書かなかった人には、下で選んだ店舗が付きます。
         <br />
         すでに名簿にいる人は自動で飛ばすので、何度貼り付けても重複しません。
       </p>
@@ -240,7 +243,7 @@ function BulkAddForm({
         <input type="hidden" name="key" value={adminKey} />
 
         <label className="block text-xs font-medium text-black/50">
-          所属店舗（この回に登録する全員に付きます）
+          所属店舗（行に店舗名を書かなかった人に付きます）
           <select name="salon" defaultValue="" className={inputClass}>
             <option value="">選択してください（あとで個別に直せます）</option>
             {SALON_CODES.map((code) => (

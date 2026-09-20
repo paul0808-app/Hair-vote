@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { RESET_KEY } from "@/lib/admin";
 import { checkAdminKey } from "@/lib/admin-auth";
-import { parseSalonCode } from "@/lib/salons";
+import { SALON_CODES, SALON_LABELS, parseSalonCode } from "@/lib/salons";
 import { getSupabase } from "@/lib/supabase";
 
 const BUCKET = "style-photos";
@@ -464,6 +464,30 @@ export async function toggleStylistActiveAction(
 const MAX_BULK_STYLISTS = 200;
 
 /**
+ * 「COコ　松本　尚弥」のように、行の先頭に店舗が書かれていれば取り出す。
+ * 書かれていなければ、行全体を名前として扱う。
+ *
+ * 全角の「＆」も半角の「&」として見るので、「Ali＆LEVEL」でも「Ali&LEVEL」でも通る。
+ * 名前そのものに含まれる空白（姓と名の間など）はそのまま残す。
+ */
+function splitSalonPrefix(line: string): { salon: string | null; name: string } {
+  // 比較用の文字列。1文字が1文字に置き換わるので、位置はもとの行とずれない
+  const compare = line.replace(/＆/g, "&").toLowerCase();
+
+  for (const code of SALON_CODES) {
+    for (const prefix of [SALON_LABELS[code], code]) {
+      const target = prefix.replace(/＆/g, "&").toLowerCase();
+      if (!compare.startsWith(target)) continue;
+      const rest = line.slice(prefix.length);
+      // 店舗名のすぐ後ろが区切り（空白・タブ・カンマ）のときだけ店舗指定とみなす
+      if (!/^[\s,、]/.test(rest)) continue;
+      return { salon: code, name: rest.replace(/^[\s,、]+/, "").trim() };
+    }
+  }
+  return { salon: null, name: line };
+}
+
+/**
  * スタイリストをまとめて名簿に登録する。
  * 1行に1人ずつ書いた名前を受け取り、すでにいる人は飛ばして追加する。
  */
@@ -480,22 +504,33 @@ export async function createStylistsBulkAction(form: FormData): Promise<ActionRe
     return { ok: false, message: "名前を1行に1人ずつ入力してください" };
   }
 
+  // 行に店舗が書かれていない人に付ける、既定の所属店舗
+  const defaultSalon = parseSalonCode(text(form, "salon"));
+
   // 前後の空白だけ取り除き、名前そのもの（姓と名の間の空白など）はそのまま残す
-  const names = raw
+  const entries = raw
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line !== "");
+    .filter((line) => line !== "")
+    .map((line) => {
+      const { salon, name } = splitSalonPrefix(line);
+      return { name, salon: salon ?? defaultSalon };
+    })
+    .filter((entry) => entry.name !== "");
 
-  if (names.length === 0) {
+  if (entries.length === 0) {
     return { ok: false, message: "名前を1行に1人ずつ入力してください" };
   }
-  if (names.length > MAX_BULK_STYLISTS) {
+  if (entries.length > MAX_BULK_STYLISTS) {
     return { ok: false, message: `一度に登録できるのは${MAX_BULK_STYLISTS}人までです` };
   }
 
-  // 入力の中での重複を先にまとめる
-  const unique = [...new Set(names)];
-  const salon = parseSalonCode(text(form, "salon"));
+  // 入力の中に同じ名前が複数あれば、先に書かれていたほうを残す
+  const byName = new Map<string, { name: string; salon: string | null }>();
+  for (const entry of entries) {
+    if (!byName.has(entry.name)) byName.set(entry.name, entry);
+  }
+  const unique = [...byName.values()];
 
   const { data: existingRows, error: readError } = await supabase.from("stylists").select("name");
   if (readError) {
@@ -506,7 +541,7 @@ export async function createStylistsBulkAction(form: FormData): Promise<ActionRe
   const existing = new Set(
     ((existingRows as Array<{ name: string }> | null) ?? []).map((row) => row.name),
   );
-  const toInsert = unique.filter((name) => !existing.has(name));
+  const toInsert = unique.filter((entry) => !existing.has(entry.name));
   const skipped = unique.length - toInsert.length;
 
   if (toInsert.length === 0) {
@@ -515,7 +550,7 @@ export async function createStylistsBulkAction(form: FormData): Promise<ActionRe
 
   const { error } = await supabase
     .from("stylists")
-    .insert(toInsert.map((name) => ({ name, salon, is_active: true })));
+    .insert(toInsert.map((entry) => ({ name: entry.name, salon: entry.salon, is_active: true })));
 
   if (error) {
     console.error("[admin] まとめて登録に失敗:", error.message);
